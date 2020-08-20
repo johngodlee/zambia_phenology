@@ -32,8 +32,6 @@ library(sjPlot)
 library(effects)
 library(MuMIn)
 library(car)
-library(hier.part)
-library(DHARMa)
 library(spaMM)
 
 #' Get valid UTM zone from latitude and longitude in WGS84 decimal degrees
@@ -175,11 +173,9 @@ zambia <- af %>%
 
 map_stack <- stack(list.files("/Volumes/john/worldclim/wc2.1_30s_prec", "*.tif", 
   full.names = TRUE))
-#map_zambia <- crop(map_stack, zambia)
-#map_sum <- calc(map_zambia, sum)
-#map <- mask(map_sum, zambia)
-#saveRDS(map, "data/map.rds")
-map <- readRDS("data/map.rds")
+map_zambia <- crop(map_stack, zambia)
+map_sum <- calc(map_zambia, sum)
+map <- mask(map_sum, zambia)
 
 # List of vipphen layers
 vipphen_file_list <- list.files(path = "/Volumes/john/modis_vipphen", 
@@ -322,7 +318,8 @@ ggplot() +
 dev.off()
 
 # Pull values and take mean across years
-plots_phen_extract <- as.data.frame(do.call(cbind, lapply(phen_wgs_list, function(x) { raster::extract(x, plots_fil_sf, method = "simple") %>%
+plots_phen_extract <- as.data.frame(do.call(cbind, lapply(phen_wgs_list, function(x) { 
+      raster::extract(x, plots_fil_sf, method = "simple") %>%
   as.data.frame(.) %>%
   mutate_all(~ case_when(
       . == -1 ~ NA_real_,
@@ -340,9 +337,6 @@ plots_phen <- plots_fil_sf %>%
   dplyr::select(-n_seasons) %>%
   filter(!is.na(s1_length))
 
-# Save intermediate as .rds ----
-saveRDS(plots_phen, file = "data/z_phen.rds")
-plots_phen <- readRDS("data/z_phen.rds")
 
 # Get diversity data ----
 # Run PCOA on distance matrix
@@ -402,8 +396,10 @@ ggplot() +
 dev.off()
 
 # Plot PCOA axes
-pcoa_gather <- plots_div %>%
+pcoa_gather <- plots_div %>% 
   dplyr::select(pcoa_1, pcoa_2, pcoa_3, pcoa_4, pcoa_5, s1_length) %>%
+  st_drop_geometry() %>%
+  as.data.frame() %>%
   gather(key, val, -pcoa_1, -s1_length) %>%
   mutate(key = toupper(gsub("oa_", "o ", .$key)))
 
@@ -418,16 +414,13 @@ ggplot() +
   labs(x = "PCo 1", y = "")
 dev.off()
 
-# Save data as .rds
-saveRDS(plots_div, "data/z_div.rds")
 
 # Analysis ----
-
-dat <- readRDS("data/z_div.rds")
 
 pdf(file =  "img/z_hist_raw.pdf", width = 12, height = 10)
 dat %>% 
   dplyr::select(-geometry, -plot_id, -plot_id_vec, -plot_cluster) %>%
+  as.data.frame() %>%
   gather(variable, value) %>%
   ggplot(aes(x = value)) + 
   geom_histogram(colour = "black", fill = "grey") + 
@@ -536,40 +529,6 @@ dev.off()
 
 # Linear models ----
 
-# TESTING USING spaMM models
-max_mod <- fitme(s1_length ~ richness_std + evenness_std + n_stems_gt5_ha_std + 
-    pcoa_1_std + pcoa_2_std + pcoa_3_std + map_std + diurnal_temp_range_std + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
-summary(max_mod)
-
-dd <- dist(dat_std[,c("x","y")])
-mm <- MaternCorr(dd, 
-  nu = max_mod$corrPars$`1`$nu, rho = max_mod$corrPars$`1`$rho)
-plot(as.numeric(dd), as.numeric(mm), 
-  xlab = "Distance between pairs of location [in m]", 
-  ylab = "Estimated correlation")
-sims <- simulateResiduals(max_mod)
-plot(sims)
-
-## Predict effect of richness across Zambia 
-filled.mapMM(max_mod, add.map = TRUE, 
-  plot.axes = quote({axis(1);axis(2)}),
-  decorations = quote(points(pred[,coordinates], pch = 17, cex = 0.4)))
-
-
-dat_std$s1_length_pred <- as.numeric(predict(max_mod, re.form = NA)) 
-
-ggplot() + 
-  geom_point(data = dat_std, aes(x = richness_std, y = s1_length)) + 
-  geom_smooth(data = dat_std, aes(x = richness_std, y = s1_length_pred))
-
-##' re.form = NA used to remove spatial effects
-
-newdat$calcium <- newdat$calcium + mean(c(0,fixef(m_spamm)[3:4])) # to remove region effect
-# get 95% confidence intervals around predictions
-newdat <- cbind(newdat, get_intervals(m_spamm, newdata = newdat, intervals = "fixefVar", re.form = NA) + mean(c(0,fixef(m_spamm)[3:4])))
-
-
 # Define model function
 phen_mod <- function(var, pre) {
   # Raw data by group
@@ -631,17 +590,37 @@ phen_mod("s1_length", "l")
 phen_mod("s1_green_rate", "r")
 phen_mod("s1_start", "s")
 
-test_part <- hier.part(dat_std$s1_length, 
-  dat_std[,c("richness_std", "evenness_std", "n_stems_gt5_ha_std",
-    "pcoa_1_std", "pcoa_2_std", "pcoa_3_std",
-    "map_std", "diurnal_temp_range_std")], 
-  fam = "gaussian", gof = "Rsqu", barplot = FALSE)
+# spaMM models with spatial autocorrelation ----
 
-test_rand <- rand.hp(dat_std$s1_length, 
-  dat_std[,c("richness_std", "evenness_std", "n_stems_gt5_ha_std",
-    "pcoa_1_std", "pcoa_2_std", "pcoa_3_std",
-    "map_std", "diurnal_temp_range_std")],
-  fam = "gaussian", gof = "Rsqu", num.reps = 10)
+# Define maximal model and a null (env. only) model
+max_mod_spamm <- fitme(s1_length ~ richness_std + evenness_std + n_stems_gt5_ha_std + 
+    pcoa_1_std + pcoa_2_std + pcoa_3_std + map_std + diurnal_temp_range_std + 
+    Matern(1 | x + y), data = dat_std, family = "gaussian")
+summary(max_mod_spamm)
 
-# https://www.researchgate.net/publication/282161585_Partitioning_Variance_Into_Constituents_in_Multiple_Regression_Models_Commonality_Analysis
+null_mod_spamm <- fitme(s1_length ~ map_std + diurnal_temp_range_std + 
+    Matern(1 | x + y), data = dat_std, family = "gaussian")
+
+# Estimate degree of spatial autocorrelation
+dd <- dist(dat_std[,c("x","y")])
+mm <- MaternCorr(dd, 
+  nu = max_mod_spamm$corrPars$`1`$nu, rho = max_mod_spamm$corrPars$`1`$rho)
+pdf(file = "img/z_l_max_mod_spamm_vario.pdf", width = 6, height = 6)
+plot(as.numeric(dd), as.numeric(mm), 
+  xlab = "Pairwise distance (m)", 
+  ylab = "Estimated correlation")
+dev.off()
+
+sims <- simulateResiduals(max_mod_spamm)
+pdf(file = "img/z_l_max_mod_spamm_resids.pdf", width = 8, height = 6)
+plot(sims)
+dev.off()
+
+# Predict effect of richness across Zambia 
+filled.mapMM(max_mod, add.map = TRUE, 
+  plot.axes = quote({axis(1);axis(2)}),
+  decorations = quote(points(pred[,coordinates], pch = 17, cex = 0.4)))
+
+# ANOVA of models
+anova(max_mod_spamm, null_mod_spamm)
 
