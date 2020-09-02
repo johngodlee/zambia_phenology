@@ -5,6 +5,8 @@ old/**
 out/**
 reading/**
 
+*.tif
+
 *.log
 *.aux
 *.lof
