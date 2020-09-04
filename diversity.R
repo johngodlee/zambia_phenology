@@ -30,7 +30,7 @@ for (i in 1:length(tree_pcoa$values$Relative_eig)) {
 # First three axes
 write(
   commandOutput(numFormat(sum(unlist(eig_per[1:3]))), "pcoaPer"),
-  file="out/z_vars.tex", append=TRUE)
+  file="out/vars.tex", append=TRUE)
 
 # Extract arrow vectors for species
 trait_pcoa_arrows <- pcoaArrows(tree_pcoa, tree_ab_mat, sort = TRUE)

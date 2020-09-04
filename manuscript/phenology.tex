@@ -51,8 +51,6 @@
 \usepackage{xcolor}
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{#1}}}   % \todo{NOTE TO SELF WRITTEN IN RED}
 
-\input{code_format}
-
 % Custom title formatting
 \let\oldtitle\title
 
@@ -74,9 +72,9 @@
 \usepackage{lineno}
 \linenumbers
 
-\newcommand{\titletext}{Phenology and species diversity in Zambian woodlands}
+\newcommand{\titletext}{Phenology and diversity in Zambia}
 
-%\input{include/z_vars}
+\input{include/vars}
 
 \begin{document}
 
@@ -84,7 +82,7 @@
 
 \vspace{1cm}
 
-Authors: Godlee, J. L.\textsuperscript{1}, Ryan, C. M.\textsuperscript{1}, Dexter, K. G.\textsuperscript{1}
+Authors: Godlee, J. L.\textsuperscript{1}, 
 
 \textsuperscript{1}: School of GeoSciences, University of Edinburgh, Edinburgh, United Kingdom \\
 \textsuperscript{2}: Some other address
@@ -106,7 +104,7 @@ School of GeoSciences, University of Edinburgh, Edinburgh, United Kingdom
 
 \LARGE{Title: \titletext}
 
-\normalsize{Running title: Phenology and diversity in Zambia}
+\normalsize{Running title: \titletext}
 
 \section{Abstract}
 
@@ -118,40 +116,84 @@ Previous studies have shown that diurnal temperature variation and precipitation
 
 It is important to control for the effects of climate in regional analyses of phenology if we wish to look at the effects of tree species diversity.
 
-It is important to separate the signal of tree growth from grass growth. Grass tends to green-up after the rainy season starts, while trees can often green-up just before the rainy season. \todo{MORE}
+It is important to separate the signal of tree growth from grass growth. Grass tends to green-up after the rainy season starts, while trees can often green-up just before the rainy season.
 
-In this study we contend that tree species composition and tree species diversity influence two key measurable aspects of the leaf phenology cycle: (1) the rate of greening at the start of the seasonal growth phase, and the overall length of the growth period. It is hypothesised that: (H\textsubscript{1}) due to variation among species in minimum viable water availability for growth, plots with greater species richness will exhibit a slower rate of greening. Additionally, we hypothesise that: (H\textsubscript{2}) plots with greater species richness will exhibit a longer growth period and greater cumulative green-ness over the course of the growth period, due to a higher resilience to variation in water availability, acting as a buffer to ecosystem-level productivity. Finally, we hypothesise that: (H\textsubscript{3}) irrespective of species diversity, variation in tree species composition will cause variation in growth season length. 
+Tree species vary in their life history strategies regarding the timing of greening. The resilience of productivity to sub-optimal growing conditions also varies between species. 
+
+In this study we contend that tree species composition and tree species diversity influence two key measurable aspects of the tree phenological cycle: (1) the rate of greening at the start of the seasonal growth phase, and (2) the overall length of the growth period, thus affecting cumulative gross primary productivity over the course of the growing season. It is hypothesised that: (H\textsubscript{1}) due to variation among species in minimum viable water availability for growth, plots with greater species richness will exhibit a slower rate of greening. Additionally, we hypothesise that: (H\textsubscript{2}) plots with greater species richness will exhibit a longer growth period and greater cumulative green-ness over the course of the growth period, due to a higher resilience to variation in water availability, acting as a buffer to ecosystem-level productivity. Finally, we hypothesise that: (H\textsubscript{3}) irrespective of species diversity, variation in tree species composition will cause variation in growth season length. 
 
 \section{Materials and methods}
 
 \subsection{Data collection}
 
-We used plot-level data on tree species diversity across \nSites{} sites from the \todo{ILUAii Zambian Forestry Commission national census} \citep{}. Each site consisted of four 20x50 m (0.2 ha) plots positioned north, east, south and west of a central point, with a distance of \todo{20 m} from the central point to the long axis of each plot. Only sites with >\stemsHa{} ha\textsuperscript{-1} were included in the analysis, to ensure all sites represented woodland rather than “grassy savanna”, which is considered a separate biome with very different species composition and ecosystem processes governing phenology (Parr et al., 2014). Sites in Mopane woodland were removed by filtering sites with greater than \mopanePer{}\% of trees belonging to \textit{Colophospermum mopane}, preserving only plots with Zambesian tree savanna / woodland. Mopane woodlands \todo{have different processes governing their phenology, so it's not sensible to include them}.
+We used plot-level data on tree species diversity across \nSites{} sites from the Zambian Integrated Land Use Assessment Phase II (ILUA-II) \citep{}. Each site consisted of four 20x50 m (0.2 ha) plots positioned radially around a central point, with a distance of 300 m from the central point to the centre of each plot \autoref{schematic}. Only sites with >\stemsHa{} stems ha\textsuperscript{-1} were included in the analysis, to ensure all sites represented woodland rather than “grassy savanna”, which is considered a separate biome with very different species composition and ecosystem processes governing phenology \citep{Parr2014}. Sites in Mopane woodland were removed by filtering sites with greater than \mopanePer{}\% of trees belonging to \textit{Colophospermum mopane}, preserving only plots with Zambesian tree savanna / woodland. Mopane woodlands \todo{have different processes governing their phenology, so it's not sensible to include them}.
 
-Within each of these plots all tree stems >5 cm diameter at breast height (DBH) were inventoried. The following data was available for each stem: species, trunk diameter (DBH), and tree identity. Plots were measured in \todo{2011}. Plot data was aggregated to site data for analyses to avoid pseudo-replication. Tree species composition of the four plots at each site was assumed to be representative of the larger area.
+\begin{figure}[H]
+\centering
+	\includegraphics[width=0.8\textwidth]{plot_loc}
+	\caption{Distribution of study sites within Zambia as white triangles, each consisting of four plots. Zambia is shaded according to growing season length as estimated by the MODIS VIPPHEN product, at 0.05 degrees spatial resolution.}
+	\label{plot_loc}
+\end{figure}
 
-Climatic variables were derived from the WorldClim database, using the BioClim variables, with a pixel size of 30 arc seconds (926 m at the equator) \citep{Fick2017}. Mean Annual Precipitation was calculated as the yearly sum of daily precipitation, averaged across all years of available data (1970-2000). Mean diurnal temperature range was calculated as the mean of monthly temperature range. \todo{WHY ARE THESE USED? INTRO OR HERE?}.
+\begin{figure}[H]
+\centering
+	\includegraphics[width=0.5\textwidth]{schematic.drawio}
+	\caption{Schematic diagram of plot layout within a site. Each 20x50 m (0.2 ha) plot is shaded grey. The site centre is denoted by a circle. Note that the plot dimensions are not to scale.}
+	\label{schematic}
+\end{figure}
 
-To quantify phenology at each site, we used the MODIS VIPPHEN satellite data product at 0.05\textdegree{} resolution (\textapprox5600 m at equator) \citep{}. The VIPPHEN product uses the modified 2-band Enhanced Vegetation Index (EVI2) and provides a number of scientific datasets (SDS) including phenological metrics such as the start, peak and length of the growing season as well as cumulative EVI2. EVI2 is well-correlated with gross primary productivity and so can act as a suitable proxy \citep{}.
+Within each plot, the species of all trees with at least one stem >5 cm diameter at breast height (DBH) was recorded. Plots were measured in \censusDate{}. Plot data was aggregated to site data for analyses to avoid pseudo-replication caused by the more spatially coarse phenology data. Tree species composition of the four plots at each site was assumed to be representative of the larger area.
 
-We used data from all 18 available years (2000-2018) in the VIPPHEN product. A single value of each variable for each pixel was calculated by taking the mean over the available years.
+Climatic variables were derived from the WorldClim database, using the BioClim variables, with a pixel size of 30 arc seconds (926 m at the equator) \citep{Fick2017}. Mean Annual Precipitation was calculated as the yearly sum of daily precipitation, averaged across all years of available data (1970-2000). Mean diurnal temperature range was calculated as the mean of monthly temperature range. 
 
-All sites in the study occurred within discrete image pixels. All sites were determined to have a single annual growth season according to the VIPPHEN product, which can assign a pixel up to three growth seasons per year. For each site, we matched pixel values from the VIPPHEN SDS, extracting length of growth season, day of start of growth season, cumulative EVI2 across the growth season, and rate of greening at the start of the growth season. Growth season start and end are estimated \todo{MORE}.
+To quantify phenology at each site, we used the MODIS MOD13Q1 satellite data product at 250 m resolution \citep{}. The MOD13Q1 product provides an Enhanced Vegetation Index (EVI2) time series at 16 day intervals. EVI is well-correlated with gross primary productivity and so can act as a suitable proxy \citep{}. We used all scenes from January 2015 to August 2020 with less than 20\% cloud cover.
+
+All sites were determined to have a single annual growth season according to the MODIS VIPPHEN product, which can assign a pixel up to three growth seasons per year. For each site, we split the fitted EVI time series into growth season chunk, each centred on a peak of EVI values. We fit a single loess model with a span of \loessSpan{} across these growth season chunks to generate an average growth season curve. We estimated the start of the growing season as the date at which EVI rises 10\% above the minimum EVI value in the curve, and the end of the growing season when EVI falls below 10\% of the minimum EVI value. We estimated the length of the growing season as the number of days between the start and end of the growing season. We estimated the greening rate as the slope of a linear model across EVI values between the start of the growing season and the maximum EVI value reached during the growing season.
+
+\begin{figure}[H]
+\centering
+	\includegraphics[width=0.8\textwidth]{ts_example}
+	\caption{Example EVI time series, demonstrating the metrics derived from it. Thin black lines show the raw EVI time series, with one line for each growth season. The thick black line shows the loess model fit. The thin blue lines show the minima which bound the growing season. The red line shows the maximum EVI value reached within the growing season. The shaded green area of the loess fit shows the growing season, during which the EVI is above 10\% of the background level. The two orange lines are linear regressions predicting the greening rate and senescence rate at the start and end of the growing season, respectively. Note that while the raw EVI time series fluctuate greatly around the middle of the growing season, mostly due to cloud, the loess fit effectively smooths this variation to estimate the true average EVI during the mid-season period.}
+	\label{ts_example}
+\end{figure}
+
 
 \subsection{Data analysis}
 
-To quantify variation in tree species composition we computed a Principle Coordinate Analysis (PCoA), with Cailliez correction for potential negative eigenvalues \citep{Legendre1998}, on a Bray-Curtis dissimilarity matrix calculated from a tree species abundance matrix per plot, using the \texttt{ape} R package \citep{ape2019}. The first three axes of this PCoA explained \pcoaPer{} of the variation in species composition among plots according to eigenvalue analysis. These three axes were used in further statistical modelling.
+To quantify variation in tree species composition we computed a Principle Coordinate Analysis (PCoA), with Cailliez correction for potential negative eigenvalues \citep{Legendre1998}, on a Bray-Curtis dissimilarity matrix calculated from tree species abundance per plot, using the \texttt{ape} R package \citep{ape2019}. The first three axes of this PCoA explained \pcoaPer{} of the variation in species composition among plots according to eigenvalue analysis. These three axes were used in further statistical modelling.
 
-We used simple multivariate linear models to assess the role of tree species diversity on our three chosen phenological metrics. We defined a maximal model structure including tree species richness, the first 4 principle coordinate analysis axes of tree species composition, and climatic variables shown by previous studies to strongly influence phenology. A model selection process was used to determine if tree species diversity markedly improved model fit. Models were compared using AIC and the R\textsuperscript{2} of the given phenological metric used as a response variable. Explanatory variables in each model were transformed to achieve normality where necessary and standardised to Z-scores prior to modelling. Standardisation put each explanatory variable on the same scale, with a mean of zero and a standard deviation of one. Standardisation allows regression coefficients to be easily compared within the same model.
+We used multivariate linear models with a spatial autocorrelation term, using the \texttt{spaMM} R package \citep{spaMM2014}, to assess the role of tree species diversity on each of the three chosen phenological metrics. We defined a maximal model structure including tree species richness, tree species abundance evenness, the first 4 principle coordinate analysis axes of tree species composition, and climatic variables shown by previous studies to strongly influence phenology. The maximal model was compared to a null model containing only climatic variables using a likelihood ratio test and by comparison of marginal AIC values. All models were fitted using Maximum Likelihood to allow comparison of fixed effects \citep{}. Explanatory variables in each model were transformed to achieve normality where necessary and standardised to Z-scores prior to modelling. Spatial autocorrelation structures were fitted using a Mat\`{e}rn correlation model \citep{}.
 
-Hierarchical partitioning was used to assess the independent and joint effects of each independent variable in the optimal model for each phenological metric \citep{Chevan1991, MacNally2002}, using the \texttt{hier.part} R package \citep{hier.part2004}. Hierarchical partitioning calculates goodness-of-fit across all combinations of independent variables \cite{Walsh2013} and is used to estimate their independent and joint contributions to the model \citep{MacNally2002}. This method was chosen because of its effectiveness in accounting for model multicollinearity \citep{Olea2010}. 
+Hierarchical partitioning was used to assess the independent and joint effects of each independent variable in the maximal model for each phenological metric \citep{Chevan1991, MacNally2002}, using the \texttt{hier.part} R package \citep{hier.part2004}. Hierarchical partitioning calculates goodness-of-fit across all combinations of independent variables \citep{Walsh2013} and is used to estimate their independent contribution to model fit \citep{MacNally2002}. This method was chosen because of its effectiveness in accounting for model multicollinearity \citep{Olea2010}. 
 
-All statistical analyses were conducted in R version 4.0.2 \citep{RCoreTeam2020}.
+All statistical analyses were conducted in R version 4.0.2 \citep{R2020}.
 
 \section{Results}
+
+\input{include/hier_part}
+
+\input{include/spamm_stat.tex} 
+
+\begin{figure}[H]
+\centering
+	\includegraphics[width=\textwidth]{mod_spamm_slopes.pdf}
+	\caption{Predictor slope estimates for each maximal model of a phenological metric. Slope estimates are $\pm$1 standard error. Slope estimates where the interval (standard error) does not overlap zero are considered to be significant effects.}
+	\label{mod_spamm_slopes}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+	\includegraphics[width=\textwidth]{pcoa.pdf}
+	\caption{Species scores fitted to the first and second (A) and first and third (B) axes of the Principal Co-ordinate ordination of tree species composition across all plots. Species vectors are the top ten species by vector length for each axis combination.}
+	\label{pcoa}
+\end{figure}
 
 \section{Discussion}
 
 \section{Conclusion}
 
+\bibliography{phenology, include/packages}
+
 \end{document}
+
+

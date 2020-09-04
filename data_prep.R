@@ -10,8 +10,8 @@ library(sf)
 source("functions.R")
 
 # Delete variables TeX file 
-if (file.exists("out/z_vars.tex")) {
-  file.remove("out/z_vars.tex")
+if (file.exists("out/vars.tex")) {
+  file.remove("out/vars.tex")
 }
 
 # Import data
@@ -25,8 +25,9 @@ plots_fil_sf <- plots %>%
   dplyr::select(
     plot_id, plot_cluster, longitude_of_centre, latitude_of_centre, 
     richness, shannon, simpson, evenness, n_stems_gt5_ha, ba_ha, agb_ha,
-    mat = bio1, diurnal_temp_range = bio2, map = bio12, 
-    clay = CLYPPT, sand = SNDPPT, cec = CECSOL) %>%
+    mat = bio1, diurnal_temp_range = bio2, map = bio12,
+    clay = CLYPPT, sand = SNDPPT, cec = CECSOL,
+    last_census_date) %>%
   group_by(plot_cluster) %>%
   summarise(
     plot_id = paste0(plot_id, collapse = ","),
@@ -40,7 +41,8 @@ plots_fil_sf <- plots %>%
     map = mean(map, na.rm = TRUE),
     clay = mean(clay, na.rm = TRUE),
     sand = mean(sand, na.rm = TRUE),
-    cec = mean(cec, na.rm = TRUE)) %>%
+    cec = mean(cec, na.rm = TRUE),
+    last_census_date = first(last_census_date)) %>%
   st_as_sf(., coords = c("longitude_of_centre", "latitude_of_centre")) %>%
   `st_crs<-`(4326) %>%
   mutate(plot_id_vec = strsplit(as.character(plot_id), 
@@ -48,6 +50,16 @@ plots_fil_sf <- plots %>%
   mutate(plot_id_length = sapply(.$plot_id_vec, length)) %>%
   filter(plot_id_length == 4) %>%
   dplyr::select(-plot_id_length)
+
+census <- unique(plots_fil_sf$last_census_date)
+
+write(
+  commandOutput(census, "censusDate"),
+  file="out/vars.tex", append=TRUE)
+
+
+plots_fil_sf <- plots_fil_sf %>% 
+  dplyr::select(-last_census_date)
 
 # Create plot ID / plot Cluster lookup table
 plot_id_lookup <- plots %>% 
@@ -70,7 +82,7 @@ write(
     commandOutput(stems_ha, "stemsHa"),
     commandOutput(mopane_per, "mopanePer")
   ),
-  file="out/z_vars.tex", append=TRUE)
+  file="out/vars.tex", append=TRUE)
 
 # Create tree species abundance matrix
 tree_ab_mat <- stems_fil %>% 
