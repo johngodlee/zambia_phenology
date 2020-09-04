@@ -1,3 +1,13 @@
+# ggplot2 theme
+theme_panel <- function() {
+  theme_bw() + 
+  theme(
+    strip.background = element_rect(fill = NA),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12),
+    strip.text = element_text(size = 12),
+  )
+}
 
 #' Get valid UTM zone from latitude and longitude in WGS84 decimal degrees
 #'
@@ -34,6 +44,17 @@ UTMProj4 <- function(x){
   }))
 }
 
+#' 
+#'
+#' @param sort logical, if true rows are sorted according to vector length on first two axes
+#'
+#' @return 
+#' 
+#' @examples
+#' 
+#' 
+#' @export
+#' 
 pcoaArrows <- function(given_pcoa, trait_df, sort = FALSE) {
     n <- nrow(trait_df)
     points.stand <- scale(given_pcoa$vectors)
@@ -76,6 +97,45 @@ numFormat <- function(x, digits = 2, method = "round"){
     })
 }
 
+#' Format a p-value for use in LaTeX
+#'
+#' @param p atomic vector p-value
+#' @param digits number of decimal places
+#'
+#' @return character string
+#' 
+#' @examples
+#' p <- 0.04592
+#' pFormat(p)
+#' 
+pFormat <- function(p, print_p = TRUE, digits = 2){
+  unlist(lapply(p, function(x) {
+    if (x < 0.01) {
+      if (print_p) {
+        return("p<0.01")
+      } else {
+        return("<0.01")
+      }
+    } 
+    else if (x < 0.05) {
+      if (print_p) {
+        return("p<0.05")
+      } else {
+        return("<0.05")
+      }
+    }
+    else {
+      out <- as.character(numFormat(x, digits = digits))
+      if (print_p) {
+        return(paste0("p = ", out))
+      } else {
+        return(out)
+      }
+    }
+  }))
+}
+
+
 commandOutput <- function(x, name){ 
   paste0("\\newcommand{\\",
     ifelse(missing(name), deparse(substitute(x)), name), 
@@ -85,32 +145,24 @@ commandOutput <- function(x, name){
   )
 }
 
-#' Interval plot of spaMM model effect sizes 
+#' spaMM model effect sizes 
 #'
 #' @param mod spaMM model object
 #' @param intercept logical, should the intercept term be included?
 #'
 #' @return ggplot2 object
 #' 
-spammEffPlot <- function(mod, intercept = FALSE) {
+spammEff <- function(mod, intercept = FALSE) {
   capture.output(mod_summ <- summary(mod))
   slopes <- data.frame(var = row.names(mod_summ$beta_table), 
     est = mod_summ$beta_table[,1], 
     se = mod_summ$beta_table[,2])
+  row.names(slopes) <- NULL
   if (!intercept) {
     slopes <- slopes[slopes$var != "(Intercept)",]
   }
-  out <- ggplot() + 
-    geom_vline(xintercept = 0, linetype = 2) + 
-    geom_point(data = slopes, aes(x = est, y = var)) + 
-    geom_errorbarh(data = slopes, 
-      aes(xmin = est - se, xmax = est + se, y = var), height = 0.1) + 
-    theme_classic() + 
-    theme(panel.grid.major.y = element_line(colour = "#E0E0E0"),
-      axis.text = element_text(size = 12)) + 
-    labs(x = "Effect slope", y = "Factor")
-
-  print(out)
+  slopes$var <- factor(slopes$var, levels = slopes$var[order(nrow(slopes):1)])
+  return(slopes)
 }
 
 corrPlot <- function(x, col = c("blue", "white", "red"), ...) {

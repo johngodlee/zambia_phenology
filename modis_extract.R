@@ -10,6 +10,8 @@ library(ggplot2)
 library(gridExtra)
 library(zoo)
 
+source("functions.R")
+
 # Read .csv files per granule 
 csv_files <- list.files("dat", "*_extract.csv", full.names = TRUE)
 csv_list <- lapply(csv_files, read.csv)
@@ -38,7 +40,7 @@ ggplot() +
   geom_path(data = evi_ts_clean, aes(x = date, y = evi, group = plot_cluster),
     alpha = 0.2) +
   scale_x_date(date_labels = "%Y-%b", date_breaks = "3 months") +
-  theme_bw() +
+  theme_panel() +
   theme(legend.position = "none", 
     axis.text = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
     panel.grid.minor = element_blank())
@@ -71,6 +73,10 @@ evi_clean <- do.call(rbind,
 
 loess_span <- 0.25
 
+write(
+  commandOutput(loess_span, "loessSpan"),
+  file="out/vars.tex", append=TRUE)
+
 pdf(file = "img/ts_smooth.pdf", width = 10, height = 8)
 evi_clean %>%
   filter(plot_cluster %in% 
@@ -79,7 +85,7 @@ evi_clean %>%
     geom_path(aes(group = season), colour = "lightseagreen") + 
     stat_smooth(method = "loess", span = loess_span, colour = "black") + 
     facet_wrap(~plot_cluster) +
-    theme_bw() + 
+    theme_panel() + 
     theme(legend.position = "none",
       strip.text = element_blank()) +
     labs(x = "Days from 1st July", y = "EVI")
@@ -211,8 +217,7 @@ phen_df$cum_vi <- unlist(lapply(seq(length(loess_fil)), function(x) {
 phen_df$cum_vi <- phen_df$cum_vi * 0.000001
 
 # Make a plot which demonstrates all the different numeric statistics
-
-ts_stat_plot_list <- lapply(sample(seq(length(loess_list)), 50), function(x) {
+growth_stat_plot <- function(x, raw = FALSE) {
   # Predict values of greenup and senescence rate
   if (!is.na(s1_greenup_mod_list[[x]])) {
   greenup_pred <- predict(s1_greenup_mod_list[[x]])
@@ -226,33 +231,58 @@ ts_stat_plot_list <- lapply(sample(seq(length(loess_list)), 50), function(x) {
     pred = senes_pred)
   }
 
-  p <- ggplot() + 
-    geom_path(data = loess_list[[x]], aes(x = days, y = pred)) + 
-    geom_path(data = loess_fil[[x]], aes(x = days, y = pred), colour = "green")
+  p <- ggplot()
+
+  if (raw) {
+    evi_raw <- evi_clean %>% 
+      filter(plot_cluster == names(loess_list[x]))
+
+    p <- p + geom_path(data = evi_raw, aes(x = days, y = evi, group = season),
+      alpha = 0.5) 
+  }
+
+  p <- p + 
+    geom_path(data = loess_list[[x]], aes(x = days, y = pred), size = 1.5) + 
+    geom_path(data = loess_fil[[x]], aes(x = days, y = pred), 
+      colour = "green", size = 1.5)
 
   if (!is.na(s1_greenup_mod_list[[x]])) {
-    p <- p + geom_path(data = greenup_pred_df, aes(x = days, y = pred), colour = "orange") 
+    p <- p + geom_path(data = greenup_pred_df, aes(x = days, y = pred),
+      size = 1.5, colour = "orange") 
   }
   if (!is.na(s1_senes_mod_list[[x]])) {
-    p <- p + geom_path(data = senes_pred_df, aes(x = days, y = pred), colour = "orange") 
+    p <- p + geom_path(data = senes_pred_df, aes(x = days, y = pred), 
+      size = 1.5, colour = "orange") 
   }
   p + 
     geom_vline(xintercept = pred_data[min_list[[x]]], colour = "blue") + 
     geom_vline(xintercept = loess_list[[x]][which(loess_list[[x]][["pred"]] == phen_df[x, "max_vi"]), "days"], colour = "red") + 
-    theme_bw() + 
+    theme_panel() + 
     labs(x = "Days from 1st July", y = "EVI") + 
     ylim(10000000, 60000000)
-})
+}
+
+ts_stat_plot_list <- lapply(sample(seq(length(loess_list)), 50), growth_stat_plot) 
 
 pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)
 grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
+dev.off()
+
+# Example plot on its own
+
+ts_example_plot <- growth_stat_plot(100, raw = TRUE)
+
+pdf(file = "img/ts_example.pdf", width = 8, height = 6)
+ts_example_plot + 
+  theme(axis.text = element_text(size = 12), 
+    axis.title = element_text(size = 12))
 dev.off()
 
 # Load 0.05 degree data to see how they match up
 old_dat <- readRDS("dat/plots_vipphen.rds")
 old_gather <- old_dat %>%
   dplyr::select(plot_cluster, contains("s1"), vipphen_cum_vi, vipphen_avg_vi) %>%
-  st_drop_geometry() %>%
+  st_drop_geometry() %>%
   gather(key, old, -plot_cluster) %>%
   mutate(key = gsub("^vipphen_", "", .$key))
 
