@@ -1,3 +1,6 @@
+# Theme colours
+pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")
+
 # ggplot2 theme
 theme_panel <- function() {
   theme_bw() + 

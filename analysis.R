@@ -19,16 +19,6 @@ library(raster)
 
 source("functions.R")
 
-theme_panel <- function() {
-  theme_bw() + 
-  theme(
-    strip.background = element_rect(fill = NA),
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 12),
-    strip.text = element_text(size = 12),
-  )
-}
-
 # Import data 
 phen_stack <- readRDS("dat/vipphen_stack.rds")
 
@@ -78,7 +68,7 @@ dat_clean %>%
   dplyr::select(variable = pred_lookup, value) %>% 
   mutate(variable = factor(variable, levels = pred_lookup)) %>%
   ggplot(aes(x = value)) + 
-  geom_histogram(colour = "black", fill = "grey") + 
+  geom_histogram(colour = "black", fill = pal[5]) + 
   facet_wrap(~variable, scales = "free") + 
   labs(x = "", y = "") + 
   theme_panel()
@@ -137,9 +127,9 @@ ggplot() +
   geom_point(data = bivar_df, aes(x = pred, y = resp), 
 	colour = "black", shape = 21) +
   geom_line(data = bivar_df, aes(x = pred, y = resp),
-	stat = "smooth", method = "lm", se = FALSE, colour = "blue") + 
+	stat = "smooth", method = "lm", se = FALSE, colour = pal[1]) + 
   geom_line(data = bivar_df, aes(x = pred, y = resp), 
-	stat = "smooth", method = "loess", colour = "#DE6400", se = FALSE) + 
+	stat = "smooth", method = "loess", colour = pal[2], se = FALSE) + 
   facet_grid(y~x, scales = "free", 
     labeller = labeller(y = resp_lookup, x = pred_lookup)) +  
   theme_panel() + 
@@ -301,33 +291,6 @@ phen_spamm_mod <- function(max_mod, null_mod, pre) {
   plot(sims)
   dev.off()
 
-  # Map of predicted values
-  max_mod_pred <- spammMapExtract(max_mod)
-  null_mod_pred <- spammMapExtract(null_mod)
-  mod_pred <- cbind(max_mod_pred, null_val = null_mod_pred$val)
-
-  max_mod_raster <- rasterFromXYZ(max_mod_pred, crs = UTMProj4("35S")) 
-  zambia_utm <- st_transform(zambia, UTMProj4("35S"))
-  max_mod_mask <- mask(max_mod_raster, zambia_utm)
-
-  max_mod_spdf <- as(max_mod_mask, "SpatialPixelsDataFrame")
-  max_mod_df <- as.data.frame(max_mod_spdf)
-  colnames(max_mod_df) <- c("val", "x", "y")
-
-  pdf(file = paste0("img/", pre, "_mod_spamm_map.pdf"), width = 8, height = 6)
-  print(
-    ggplot() + 
-      stat_contour_filled(data = max_mod_df, aes(x = x, y = y, z = val)) + 
-      scale_fill_viridis_d(name = "") + 
-      geom_sf(data = st_transform(zambia, UTMProj4("35S")), 
-        fill = NA, colour = "black") + 
-      geom_point(data = dat_std, aes(x = x, y = y), 
-        colour = "black", fill = "white", shape = 24) + 
-      theme_panel() + 
-      labs(x = "", y = "")
-    )
-  dev.off()
-
   # Return list of model statistics
   ##' 1. Model predictions 
   ##' 2. Model summary 
@@ -351,6 +314,7 @@ spamm_s <- phen_spamm_mod(max_mod_spamm_s, null_mod_spamm_s, "s")
 spamm_list <- list(spamm_c, spamm_l, spamm_r, spamm_d, spamm_s)
 
 saveRDS(spamm_list, "dat/spamm_list.rds")
+spamm_list <- readRDS("dat/spamm_list.rds")
 
 # Export model statistics table
 spamm_stat_df <- as.data.frame(do.call(rbind, lapply(spamm_list, function(x) {
@@ -397,11 +361,11 @@ ggplot() +
   geom_errorbarh(data = spamm_eff_df, 
     aes(xmin = est - se, xmax = est + se, y = var), height = 0.1) + 
   geom_point(data = spamm_eff_df, aes(x = est, y = var), 
-    shape = 21, fill = "grey", colour = "black") + 
+    shape = 21, fill = pal[5], colour = "black") + 
   facet_wrap(~resp, scales = "free_x", nrow = 1,
     labeller = labeller(resp = resp_lookup)) +  
   theme_panel() + 
-  theme(panel.grid.major.y = element_line(colour = "#E0E0E0"),
+  theme(panel.grid.major.y = element_line(colour = pal[6]),
     panel.spacing = unit(2.5, "lines")) + 
   labs(x = "Slope", y = "")
 dev.off()
@@ -459,15 +423,15 @@ arrow_scale = 75
 pdf(file = "img/pcoa.pdf", width = 10, height = 6)
 ggplot() + 
   geom_point(data = pcoa_gather, 
-    aes(x = pcoa_1, y = val), shape = 21, fill = "grey", colour = "black") + 
+    aes(x = pcoa_1, y = val), shape = 21, fill = pal[5], colour = "black") + 
   geom_segment(data = pcoa_arrows_gather, 
     aes(xend = pcoa_1 / arrow_scale, yend = val / arrow_scale),
-    x = 0, y = 0, colour = "red",
+    x = 0, y = 0, colour = pal[2],
     arrow = arrow(length = unit(3, "mm"))) + 
   geom_label_repel(data = pcoa_arrows_gather,
     aes(x = pcoa_1 / arrow_scale, y = val / arrow_scale, label = sp),
     label.padding = 0.085,
-    segment.colour = "lightseagreen", 
+    segment.colour = pal[1], 
     min.segment.length = 0,
     box.padding = 0.5,
     size = 2) + 
@@ -476,7 +440,6 @@ ggplot() +
   theme_panel() +
   labs(x = "PCoA 1", y = "")
 dev.off()
-
 
 # Plot location map
 s1_length_tile <- as.data.frame(
@@ -487,7 +450,7 @@ pdf(file = "img/plot_loc.pdf", height = 8, width = 10)
 ggplot() +
   geom_tile(data = s1_length_tile, aes(x = x, y = y, fill = X3)) +
   geom_sf(data = zambia, colour = "black", fill = NA) +
-  geom_sf(data = dat_clean, colour = "black", fill = "grey", shape = 24, size = 3) +
+  geom_sf(data = dat_clean, colour = "black", fill = pal[6], shape = 24, size = 3) +
   scale_fill_viridis(name = "Season length\n(days)", limits = c(100, 300)) + 
   theme_panel() + 
   labs(x = "", y = "")
@@ -496,14 +459,13 @@ dev.off()
 # How does species _composition_ affect phenology?
 
 ##' PCOA 1 has negative influence on season length, PCOA 2 has positive 
-spamm_l[[2]]$beta_table
+spamm_list[[2]][[2]]$beta_table
 
 ##' PCOA 1, 2 and 3 have positive influence on rate of greening
-spamm_r[[2]]$beta_table
+spamm_list[[3]][[2]]$beta_table
 
 ##' PCOA 1 has positive influence on season start
-spamm_s[[2]]$beta_table
-
+spamm_list[[5]][[2]]$beta_table
 
 # What to export to show spatial autocorrelation effects?
 ##' Rho and nu from model summary objects?
