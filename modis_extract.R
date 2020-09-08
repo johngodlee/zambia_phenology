@@ -34,6 +34,10 @@ plot_corrupt <- evi_ts_df %>%
 evi_ts_clean <- evi_ts_df %>%
   filter(plot_cluster != plot_corrupt)
 
+# Downscale EVI measurements
+##' divided by a million
+evi_ts_clean$evi <- evi_ts_clean$evi * 0.000001
+
 # Plot all time series
 pdf(file = "img/ts.pdf", width = 12, height = 8)
 ggplot() +
@@ -48,10 +52,22 @@ dev.off()
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 seasonGet <- function(x, min_date, max_date, date = "date") {
+  # Subset data between max and min dates
   out <- x[x[[date]] > as.Date(min_date) & x[[date]] < as.Date(max_date),]
+
+  # Get the "season" of the data, i.e. the year the measurements start
   out$season <- min(format(out[[date]], "%Y"))
+
+  # Get the days from the min date
   out$days <- as.numeric(out[[date]] - as.Date(min_date))
+
+  # Get year
   out$year <- format(out[[date]], "%Y")
+
+  # Recenter days on start of year in middle of growing season
+  out$doy <- as.numeric(out$date - as.Date(paste0(format(as.Date(max_date), "%Y"), "-01-01")))
+    
+
   return(out)
 }
 
@@ -77,18 +93,19 @@ write(
   commandOutput(loess_span, "loessSpan"),
   file="out/vars.tex", append=TRUE)
 
-pdf(file = "img/ts_smooth.pdf", width = 10, height = 8)
+pdf(file = "img/ts_smooth.pdf", width = 12, height = 8)
 evi_clean %>%
   filter(plot_cluster %in% 
     unique(.$plot_cluster)[sample(seq(length(unique(.$plot_cluster))), 50)]) %>%
-  ggplot(aes(x = days, y = evi)) + 
-    geom_path(aes(group = season), colour = "lightseagreen") + 
+  ggplot(aes(x = doy, y = evi)) + 
+    geom_path(aes(group = season), colour = pal[1]) + 
     stat_smooth(method = "loess", span = loess_span, colour = "black") + 
     facet_wrap(~plot_cluster) +
     theme_panel() + 
     theme(legend.position = "none",
-      strip.text = element_blank()) +
-    labs(x = "Days from 1st July", y = "EVI")
+      strip.text = element_blank(),
+      axis.text.x = element_text(size=12, angle=90, vjust=0.5)) + 
+    labs(x = "Days from 1st Jan.", y = "EVI")
 dev.off()
 
 pdf(file = "img/ts_season_year.pdf", width = 10, height = 8)
@@ -100,12 +117,12 @@ dev.off()
 # Compute yearly curves for each plot
 evi_split <- split(evi_clean, evi_clean$plot_cluster)
 
-pred_data <- seq(min(evi_split[[1]]$days), max(evi_split[[1]]$days))
+pred_data <- seq(min(evi_split[[1]]$doy), max(evi_split[[1]]$doy))
 
 loess_list <- lapply(evi_split, function(x) {
-  mod <- loess(evi ~ days, data = x, span = loess_span)
+  mod <- loess(evi ~ doy, data = x, span = loess_span)
   pred <- predict(mod, newdata = pred_data) 
-  data.frame(pred, days = pred_data)
+  data.frame(pred, doy = pred_data)
 })
 
 # Calculate key statistics: 
@@ -143,25 +160,24 @@ phen_df$avg_vi <- unlist(lapply(loess_fil, function(x) {mean(x[["pred"]])}))
 # Season start date (s1_start)
 ##' Date when EVI rises 10% above minimum 
 
-## Extract season start value
+## Extract season start doy
 phen_df$s1_start <- unlist(lapply(seq(length(loess_fil)), function(x) {
   min_val <- loess_list[[x]][min_list[[x]][1], "pred"] 
   start_val <- min_val + (min_val * 0.1)
-  loess_fil[[x]][min(which(loess_fil[[x]][["pred"]] > start_val)), "days"]
+  loess_fil[[x]][min(which(loess_fil[[x]][["pred"]] > start_val)), "doy"]
 }))
-##' Need to change to DOY at some point, currently days from July 1st
 
 # Season end date (s1_end)
 ##' Date after start when EVI falls below 10% above minimum 
 phen_df$s1_end <- unlist(lapply(seq(length(loess_fil)), function(x) {
   min_val <- loess_list[[x]][min_list[[x]][1], "pred"] 
   start_val <- min_val + (min_val * 0.1)
-  loess_fil[[x]][max(which(loess_fil[[x]][["pred"]] > start_val)), "days"]
+  loess_fil[[x]][max(which(loess_fil[[x]][["pred"]] > start_val)), "doy"]
 }))
 
 loess_fil <- lapply(seq(length(loess_fil)), function(x) {
   loes <- loess_fil[[x]]
-  loes[loes$days >= phen_df[x, "s1_start"] & loes$days <= phen_df[x, "s1_end"],]
+  loes[loes$doy >= phen_df[x, "s1_start"] & loes$doy <= phen_df[x, "s1_end"],]
 })
 
 # Season length (s1_length)
@@ -172,11 +188,11 @@ phen_df$s1_length <- phen_df$s1_end - phen_df$s1_start
 ##' Slope of Linear regression between start (10%) and max
 s1_greenup_mod_list <- lapply(seq(length(loess_fil)), function(x) {
   loes <- loess_fil[[x]]
-  greenup_fil <- loes[loes[["days"]] < loes[which(loes[["pred"]] == phen_df[x, "max_vi"]), "days"],]
+  greenup_fil <- loes[loes[["doy"]] < loes[which(loes[["pred"]] == phen_df[x, "max_vi"]), "doy"],]
   if (nrow(greenup_fil) == 0) {
     return(NA)
   } else {
-    return(lm(pred ~ days, data = greenup_fil))
+    return(lm(pred ~ doy, data = greenup_fil))
   }
 })
 
@@ -192,11 +208,11 @@ phen_df$s1_green_rate <- unlist(lapply(s1_greenup_mod_list, function(x) {
 ##' Slope of Linear regression between max and end (10%)
 s1_senes_mod_list <- lapply(seq(length(loess_fil)), function(x) {
   loes <- loess_fil[[x]]
-  greenup_fil <- loes[loes[["days"]] > loes[which(loes[["pred"]] == phen_df[x, "max_vi"]), "days"],]
+  greenup_fil <- loes[loes[["doy"]] > loes[which(loes[["pred"]] == phen_df[x, "max_vi"]), "doy"],]
   if (nrow(greenup_fil) == 0) {
     return(NA)
   } else {
-    return(lm(pred ~ days, data = greenup_fil))
+    return(lm(pred ~ doy, data = greenup_fil))
   }
 })
 
@@ -212,22 +228,21 @@ phen_df$s1_senes_rate <- unlist(lapply(s1_senes_mod_list, function(x) {
 ##' Area under curve between start and end, minus minimum
 phen_df$cum_vi <- unlist(lapply(seq(length(loess_fil)), function(x) {
   loess_min <- loess_fil[[x]][["pred"]] - phen_df[x, "min_vi"] 
-  sum(diff(loess_fil[[x]][["days"]])*rollmean(loess_min,2))
+  sum(diff(loess_fil[[x]][["doy"]])*rollmean(loess_min,2))
 }))
-phen_df$cum_vi <- phen_df$cum_vi * 0.000001
 
 # Make a plot which demonstrates all the different numeric statistics
 growth_stat_plot <- function(x, raw = FALSE) {
   # Predict values of greenup and senescence rate
-  if (!is.na(s1_greenup_mod_list[[x]])) {
+  if (class(s1_greenup_mod_list[[x]]) == "lm") {
   greenup_pred <- predict(s1_greenup_mod_list[[x]])
-  greenup_pred_df <- data.frame(days = as.numeric(names(greenup_pred)), 
+  greenup_pred_df <- data.frame(doy = s1_greenup_mod_list[[x]]$model$doy, 
     pred = greenup_pred)
   }
 
-  if (!is.na(s1_senes_mod_list[[x]])) {
+  if (class(s1_senes_mod_list[[x]]) == "lm") {
   senes_pred <- predict(s1_senes_mod_list[[x]])
-  senes_pred_df <- data.frame(days = as.numeric(names(senes_pred)), 
+  senes_pred_df <- data.frame(doy = s1_senes_mod_list[[x]]$model$doy, 
     pred = senes_pred)
   }
 
@@ -237,28 +252,28 @@ growth_stat_plot <- function(x, raw = FALSE) {
     evi_raw <- evi_clean %>% 
       filter(plot_cluster == names(loess_list[x]))
 
-    p <- p + geom_path(data = evi_raw, aes(x = days, y = evi, group = season),
+    p <- p + geom_path(data = evi_raw, aes(x = doy, y = evi, group = season),
       alpha = 0.5) 
   }
 
   p <- p + 
-    geom_path(data = loess_list[[x]], aes(x = days, y = pred), size = 1.5) + 
-    geom_path(data = loess_fil[[x]], aes(x = days, y = pred), 
-      colour = "green", size = 1.5)
+    geom_path(data = loess_list[[x]], aes(x = doy, y = pred), size = 1.5) + 
+    geom_path(data = loess_fil[[x]], aes(x = doy, y = pred), 
+      colour = pal[1], size = 1.5)
 
-  if (!is.na(s1_greenup_mod_list[[x]])) {
-    p <- p + geom_path(data = greenup_pred_df, aes(x = days, y = pred),
-      size = 1.5, colour = "orange") 
+  if (class(s1_greenup_mod_list[[x]]) == "lm") {
+    p <- p + geom_path(data = greenup_pred_df, aes(x = doy, y = pred),
+      size = 1.5, colour = pal[2]) 
   }
-  if (!is.na(s1_senes_mod_list[[x]])) {
-    p <- p + geom_path(data = senes_pred_df, aes(x = days, y = pred), 
-      size = 1.5, colour = "orange") 
+  if (class(s1_senes_mod_list[[x]]) == "lm") {
+    p <- p + geom_path(data = senes_pred_df, aes(x = doy, y = pred), 
+      size = 1.5, colour = pal[2]) 
   }
   p + 
-    geom_vline(xintercept = pred_data[min_list[[x]]], colour = "blue") + 
-    geom_vline(xintercept = loess_list[[x]][which(loess_list[[x]][["pred"]] == phen_df[x, "max_vi"]), "days"], colour = "red") + 
+    geom_vline(xintercept = pred_data[min_list[[x]]], colour = pal[3] ) + 
+    geom_vline(xintercept = loess_list[[x]][which(loess_list[[x]][["pred"]] == phen_df[x, "max_vi"]), "doy"], colour = pal[4]) + 
     theme_panel() + 
-    labs(x = "Days from 1st July", y = "EVI") + 
+    labs(x = "Days from 1st Jan.", y = "EVI") + 
     ylim(10000000, 60000000)
 }
 
@@ -282,18 +297,25 @@ dev.off()
 old_dat <- readRDS("dat/plots_vipphen.rds")
 old_gather <- old_dat %>%
   dplyr::select(plot_cluster, contains("s1"), vipphen_cum_vi, vipphen_avg_vi) %>%
-  st_drop_geometry() %>%
+  st_drop_geometry() %>%
   gather(key, old, -plot_cluster) %>%
   mutate(key = gsub("^vipphen_", "", .$key))
 
 compare <- phen_df %>%
   gather(key, new, -plot_cluster) %>%
-  left_join(., old_gather, by = c("plot_cluster", "key"))
+  left_join(., old_gather, by = c("plot_cluster", "key")) %>%
+  filter(!key %in% c("min_vi", "max_vi"), 
+  !(old < 150 & key == "s1_start"))
 
 pdf(file = "img/old_new_compare.pdf", width = 12, height = 8)
 ggplot() + 
-  geom_point(data = compare, aes(x = old, y = new)) + 
-  facet_wrap(~key, scales = "free")
+  geom_point(data = compare, aes(x = old, y = new), 
+    alpha = 0.8, colour = "black", fill = pal[5], shape = 21) + 
+  geom_smooth(data = compare, aes(x = old, y = new), 
+    method = "lm", colour = pal[1]) + 
+  facet_wrap(~key, scales = "free") + 
+  theme_panel() + 
+  labs(x = "MODIS VIPPHEN", y = "MOD13Q1")
 dev.off()
 
 phen_all <- old_dat %>%
