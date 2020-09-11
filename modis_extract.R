@@ -263,18 +263,17 @@ growth_stat_plot <- function(x, raw = FALSE) {
 
   if (class(s1_greenup_mod_list[[x]]) == "lm") {
     p <- p + geom_path(data = greenup_pred_df, aes(x = doy, y = pred),
-      size = 1.5, colour = pal[2]) 
+      size = 2, linetype = "dotdash", colour = pal[2]) 
   }
   if (class(s1_senes_mod_list[[x]]) == "lm") {
     p <- p + geom_path(data = senes_pred_df, aes(x = doy, y = pred), 
-      size = 1.5, colour = pal[2]) 
+      size = 2, linetype = "dotdash", colour = pal[2]) 
   }
   p + 
     geom_vline(xintercept = pred_data[min_list[[x]]], colour = pal[3] ) + 
     geom_vline(xintercept = loess_list[[x]][which(loess_list[[x]][["pred"]] == phen_df[x, "max_vi"]), "doy"], colour = pal[4]) + 
     theme_panel() + 
-    labs(x = "Days from 1st Jan.", y = "EVI") + 
-    ylim(10000000, 60000000)
+    labs(x = "Days from 1st Jan.", y = "EVI")
 }
 
 ts_stat_plot_list <- lapply(sample(seq(length(loess_list)), 50), growth_stat_plot) 
