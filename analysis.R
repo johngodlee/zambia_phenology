@@ -16,25 +16,29 @@ library(DHARMa)
 library(hier.part)
 library(xtable)
 library(raster)
+library(vegan)
 
 source("functions.R")
 
 # Import data 
+dat <- readRDS("dat/plots_phen.rds")
+
 phen_stack <- readRDS("dat/vipphen_stack.rds")
 
 af <- st_read("/Volumes/john/africa_countries/africa.shp")
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
 
-dat <- readRDS("dat/plots_phen.rds")
-
-pcoa_arrows <- readRDS("dat/pcoa_arrows.rds")
+nmds <- readRDS("dat/nmds.rds")
+species_scores <- readRDS("dat/species_scores.rds")
 
 # Define variable name translation lookup
 pred_lookup <- c("Richness", "Evenness", "Stem density",
-    "PCoA 1", "PCoA 2", "PCoA 3", "MAP", "Diurnal dT")
+    "NMDS 1", "NMDS 2", "NMDS 3",  
+    "MAP", "Diurnal dT")
 names(pred_lookup) <- c("richness", "evenness", "n_stems_gt5_ha", 
-  "pcoa_1", "pcoa_2", "pcoa_3", "map", "diurnal_temp_range")
+  "NMDS1", "NMDS2", "NMDS3", 
+  "map", "diurnal_temp_range")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
   "Greening rate", "Senescence rate", "Season start")
@@ -43,7 +47,8 @@ names(resp_lookup) <- c("cum_vi", "s1_length",
 
 # Remove old variables 
 dat_clean <- dat %>%
-  dplyr::select(-starts_with("vipphen"))
+  dplyr::select(-starts_with("vipphen")) %>%
+  filter(plot_cluster != "ZIS_2385")
 
 # How many sites are there?
 write(
@@ -142,7 +147,7 @@ dat_std <- dat_clean %>%
       "richness",
       "evenness", 
       "n_stems_gt5_ha",
-      "pcoa_1", "pcoa_2", "pcoa_3", 
+      "NMDS1", "NMDS2", "NMDS3", 
       "map",
       "diurnal_temp_range"),
     .funs = list(std = ~(scale(.) %>% as.vector))) %>%
@@ -177,7 +182,7 @@ phen_mod <- function(var, pre) {
 
   # Define maximal model
   max_mod <- lm(get(var) ~ richness + evenness + n_stems_gt5_ha + 
-    pcoa_1 + pcoa_2 + pcoa_3 + 
+    NMDS1 + NMDS2 + NMDS3 +
     map + diurnal_temp_range, 
     data = dat_std)
 
@@ -199,7 +204,7 @@ phen_mod <- function(var, pre) {
   # Reduced model comparison 
   max_mod_ml <- lm(get(var) ~ 
     richness + evenness + n_stems_gt5_ha + 
-    pcoa_1 + pcoa_2 + pcoa_3 + 
+    NMDS1 + NMDS2 + NMDS3 + 
     map + diurnal_temp_range,
   data = dat_std)
 
@@ -225,32 +230,31 @@ phen_mod("s1_start", "s")
 # spaMM models with spatial autocorrelation ----
 
 # Fit models
-max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt5_ha + 
-    pcoa_1 + pcoa_2 + pcoa_3 + map + diurnal_temp_range + 
+max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt5_ha + NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_c <- fitme(cum_vi ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_l <- fitme(s1_length ~ richness + evenness + n_stems_gt5_ha + 
-    pcoa_1 + pcoa_2 + pcoa_3 + map + diurnal_temp_range + 
+    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_l <- fitme(s1_length ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_r <- fitme(s1_green_rate ~ richness + evenness + n_stems_gt5_ha + 
-    pcoa_1 + pcoa_2 + pcoa_3 + map + diurnal_temp_range + 
+    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_r <- fitme(s1_green_rate ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_d <- fitme(s1_senes_rate ~ richness + evenness + n_stems_gt5_ha + 
-    pcoa_1 + pcoa_2 + pcoa_3 + map + diurnal_temp_range + 
+    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_d <- fitme(s1_senes_rate ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_s <- fitme(s1_start ~ richness + evenness + n_stems_gt5_ha + 
-    pcoa_1 + pcoa_2 + pcoa_3 + map + diurnal_temp_range + 
+    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_s <- fitme(s1_start ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
@@ -259,6 +263,7 @@ null_mod_spamm_s <- fitme(s1_start ~ map + diurnal_temp_range +
 phen_spamm_mod <- function(max_mod, null_mod, pre) {
 
   # Model summary
+  mod_pred <- predict(max_mod)
   mod_summ <- summary(max_mod)
   mod_lrt <- LRT(max_mod, null_mod)
   max_aic <- AIC(max_mod)
@@ -270,8 +275,8 @@ phen_spamm_mod <- function(max_mod, null_mod, pre) {
   resp <- as.character(max_mod$predictor[[2]])
 
   mod_hier <- hier.part(dat_std[[resp]], dat_std %>% 
-    dplyr::select(richness, evenness, n_stems_gt5_ha, pcoa_1, 
-      pcoa_2, pcoa_3, map, diurnal_temp_range), barplot = FALSE)
+    dplyr::select(richness, evenness, n_stems_gt5_ha, NMDS1, NMDS2, NMDS3,
+      map, diurnal_temp_range), barplot = FALSE)
 
   # Estimate degree of spatial autocorrelation
   dd <- dist(dat_std[,c("x","y")])
@@ -388,57 +393,53 @@ writeLines(print(mod_hier_tab, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-# Plot PCOA with arrows
-pcoa_gather <- dat_clean %>% 
-  dplyr::select(pcoa_1, pcoa_2, pcoa_3) %>%
-  st_drop_geometry() %>%
-  as.data.frame() %>%
-  gather(key, val, -pcoa_1) %>%
-  mutate(key = gsub("pcoa_", "PCoA ", .$key))
 
-##' For each pair of axes: 1,2; 1,3;
-##' Calculate vector length and sort rows for 10 largest vectors
-pcoa_arrows_gather <- do.call(rbind, lapply(list(c(1,2), c(1,3)), function(x) {
-  # Subset pairs of axes
-  pcoa_fil <- pcoa_arrows[,x]
+# Plot NMDS
+nmds_plot <- function(axes = c(1,2), clust = "clust4") {
+  # Run ordiellipse
+  ord <- ordiplot(nmds, choices = axes, display = 'sites', type = 'n')
+  ord$sites <- ord$sites[row.names(ord$sites) %in% dat_clean$plot_cluster,]
+  ell <- ordiellipse(ord, dat_clean[[clust]], display = "sites", draw = "none",
+    kind = "sd", conf = .95, label = T)
 
-  # Calculate vector distances
-  dists <- list()
-  for (i in 1:nrow(pcoa_fil)) {
-    dists[i] <- as.vector(dist(t(matrix(c(pcoa_fil[i,1:2], 0,0), 2))))
+  dat_clean[[clust]] <- factor(dat_clean[[clust]])
+
+  # Extract ellipses from ordiellipse
+  df_ell <- data.frame()
+  for(g in levels(dat_clean[[clust]])){
+    df_ell <- rbind(df_ell, 
+      cbind(as.data.frame(with(dat_clean[dat_clean[[clust]] == g,],
+            covEllipse(ell[[g]]$cov, ell[[g]]$center))), group = g))
   }
 
-  # Order arrows dataframe by vector length 
-  pcoa_order <- as.data.frame(pcoa_fil[order(unlist(dists), 
-      decreasing = TRUE),])
+  # Create plots
+  x <- sym(paste0("NMDS", axes[1]))
+  y <- sym(paste0("NMDS", axes[2]))
+  colour = sym(clust)
 
-  pcoa_order$sp <- gsub("\\s", "\n", row.names(pcoa_order))
-  pcoa_order$key <- gsub("Axis\\.", "PCoA ", names(pcoa_order[2]))
-  row.names(pcoa_order) <- NULL
-  names(pcoa_order) <- c("pcoa_1", "val", "sp", "key")
-  return(pcoa_order[1:10,c(3,4,1,2)])
-}))
+  annot_df <- df_ell %>%
+    group_by(group) %>%
+    summarise_all(mean)
 
-arrow_scale = 75
-pdf(file = "img/pcoa.pdf", width = 10, height = 6)
-ggplot() + 
-  geom_point(data = pcoa_gather, 
-    aes(x = pcoa_1, y = val), shape = 21, fill = pal[5], colour = "black") + 
-  geom_segment(data = pcoa_arrows_gather, 
-    aes(xend = pcoa_1 / arrow_scale, yend = val / arrow_scale),
-    x = 0, y = 0, colour = pal[2],
-    arrow = arrow(length = unit(3, "mm"))) + 
-  geom_label_repel(data = pcoa_arrows_gather,
-    aes(x = pcoa_1 / arrow_scale, y = val / arrow_scale, label = sp),
-    label.padding = 0.085,
-    segment.colour = pal[1], 
-    min.segment.length = 0,
-    box.padding = 0.5,
-    size = 2) + 
-  facet_wrap(~key) + 
-  coord_equal() + 
-  theme_panel() +
-  labs(x = "PCoA 1", y = "")
+  p <- ggplot() + 
+    geom_point(data = dat_clean, 
+      aes(x = !!x, y = !!y, fill = !!colour), colour = "black", shape = 21) +
+    geom_path(data = df_ell, 
+      aes(x = !!x, y = !!y, colour = group), size = 1) + 
+    geom_label(data = annot_df, 
+      aes(x = !!x, y = !!y, label = group, colour = group)) + 
+    scale_colour_hue(l = 20) + 
+    theme_panel() + 
+    theme(legend.position = "none")
+
+  return(p)
+}
+
+p1 <- nmds_plot(c(1,2), "clust4")
+p2 <- nmds_plot(c(1,3), "clust4")
+
+pdf(file = "img/nmds.pdf", width = 12, height = 6)
+grid.arrange(p1, p2, ncol = 2)
 dev.off()
 
 # Plot location map
