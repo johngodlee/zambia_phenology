@@ -17,6 +17,13 @@ if (file.exists("out/vars.tex")) {
 # Import data
 plots <- read.csv("~/git_proj/seosaw_data/data_out/plots_v2.7.csv")
 stems <- read.csv("~/git_proj/seosaw_data/data_out/stems_latest_v2.7.csv")
+load("/Volumes/john/seosaw_plot_summary5Apr2019.Rdata")
+
+
+# Create clean clusters dataframe
+clust_df <- ssaw8$cluster %>%
+  filter(file == "46_zambia_siampale_ILUAii_checkN.xlsx") %>%
+  dplyr::select(plot_id = plotcode, contains("clust"))
 
 # Subset plots and data fields - Zambia ILUAii data only
 plots_fil_sf <- plots %>% 
@@ -28,9 +35,13 @@ plots_fil_sf <- plots %>%
     mat = bio1, diurnal_temp_range = bio2, map = bio12,
     clay = CLYPPT, sand = SNDPPT, cec = CECSOL,
     last_census_date) %>%
+  left_join(., clust_df, by = "plot_id") %>%
   group_by(plot_cluster) %>%
   summarise(
     plot_id = paste0(plot_id, collapse = ","),
+    clust7 = first(na.omit(clust7)),
+    clust5 = first(na.omit(clust5)),
+    clust4 = first(na.omit(clust4)),
     longitude_of_centre = mean(longitude_of_centre, na.rm = TRUE),
     latitude_of_centre = mean(latitude_of_centre, na.rm = TRUE),
     n_stems_gt5_ha = mean(n_stems_gt5_ha, na.rm = TRUE),
@@ -48,7 +59,8 @@ plots_fil_sf <- plots %>%
   mutate(plot_id_vec = strsplit(as.character(plot_id), 
   split = ",")) %>%
   mutate(plot_id_length = sapply(.$plot_id_vec, length)) %>%
-  filter(plot_id_length == 4) %>%
+  filter(plot_id_length == 4,
+    !is.na(clust5)) %>%
   dplyr::select(-plot_id_length)
 
 census <- unique(plots_fil_sf$last_census_date)
@@ -97,13 +109,13 @@ tree_ab_mat <- stems_fil %>%
   mutate_at(vars(-plot_cluster), as.double) %>%
   as.data.frame() %>%
   dplyr::select(-`Indet indet`)
-rownames(tree_ab_mat) <- tree_ab_mat[["plot_cluster"]]
 
 # Clean and filter tree species abundance matrix
-tree_ab_mat <- tree_ab_mat[,-1, drop=FALSE]
-tree_ab_mat <- filter(tree_ab_mat, (tree_ab_mat$`Colophospermum mopane` / rowSums(tree_ab_mat)) < mopane_per)
-tree_ab_mat <- filter_all(tree_ab_mat, any_vars(. != 0))
-tree_ab_mat <- tree_ab_mat[stems_ha < rowSums(tree_ab_mat) / 0.4,]
+rownames(tree_ab_mat) <- tree_ab_mat[["plot_cluster"]]
+tree_ab_mat <- tree_ab_mat[,-1, drop=FALSE]  # Remove plot cluster column
+tree_ab_mat <- filter(tree_ab_mat, (tree_ab_mat$`Colophospermum mopane` / rowSums(tree_ab_mat)) < mopane_per)  # Filter mopane plots
+tree_ab_mat <- filter_all(tree_ab_mat, any_vars(. != 0))  # Filter empty plots
+tree_ab_mat <- tree_ab_mat[stems_ha < rowSums(tree_ab_mat) / 0.4,]  # Remove plots with fewer than x stems ha
 
 # Remove plots not in tree abundance matrix
 plots_fil_sf <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat))
