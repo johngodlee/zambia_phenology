@@ -65,8 +65,17 @@ plots_fil_sf <- plots %>%
 
 census <- unique(plots_fil_sf$last_census_date)
 
+n_total_sites <- plots %>%
+  filter(prinv == "Siampale A.") %>%
+  pull(plot_cluster) %>%
+  unique() %>%
+  length()
+
 write(
-  commandOutput(census, "censusDate"),
+  c(
+    commandOutput(census, "censusDate"),
+    commandOutput(n_total_sites, "nTotalSites")
+    ),
   file="out/vars.tex", append=TRUE)
 
 
