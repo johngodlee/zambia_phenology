@@ -1,6 +1,9 @@
 # Theme colours
 pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")
 
+# Cluster colours
+clust_pal <- c("#5cb930", "#6e49cc")
+
 # ggplot2 theme
 theme_panel <- function() {
   theme_bw() + 
@@ -9,6 +12,7 @@ theme_panel <- function() {
     axis.text = element_text(size = 12),
     axis.title = element_text(size = 12),
     strip.text = element_text(size = 12),
+    legend.text = element_text(size = 12),
   )
 }
 

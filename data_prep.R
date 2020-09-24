@@ -19,7 +19,6 @@ plots <- read.csv("~/git_proj/seosaw_data/data_out/plots_v2.7.csv")
 stems <- read.csv("~/git_proj/seosaw_data/data_out/stems_latest_v2.7.csv")
 load("/Volumes/john/seosaw_plot_summary5Apr2019.Rdata")
 
-
 # Create clean clusters dataframe
 clust_df <- ssaw8$cluster %>%
   filter(file == "46_zambia_siampale_ILUAii_checkN.xlsx") %>%
@@ -36,6 +35,7 @@ plots_fil_sf <- plots %>%
     clay = CLYPPT, sand = SNDPPT, cec = CECSOL,
     last_census_date) %>%
   left_join(., clust_df, by = "plot_id") %>%
+  filter(clust4 %in% c(1,2)) %>%
   group_by(plot_cluster) %>%
   summarise(
     plot_id = paste0(plot_id, collapse = ","),
@@ -58,10 +58,9 @@ plots_fil_sf <- plots %>%
   `st_crs<-`(4326) %>%
   mutate(plot_id_vec = strsplit(as.character(plot_id), 
   split = ",")) %>%
-  mutate(plot_id_length = sapply(.$plot_id_vec, length)) %>%
-  filter(plot_id_length == 4,
-    !is.na(clust5)) %>%
-  dplyr::select(-plot_id_length)
+  mutate(plot_id_length = sapply(.$plot_id_vec, length)) #%>%
+ # filter(plot_id_length == 4) %>%
+ # dplyr::select(-plot_id_length)
 
 census <- unique(plots_fil_sf$last_census_date)
 
@@ -92,7 +91,8 @@ saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 # Filter stems by plots
 stems_fil <- stems %>%
   inner_join(., plot_id_lookup, by = "plot_id") %>%
-  dplyr::select(-plot_id)
+  dplyr::select(-plot_id) %>%
+  filter(diam >= 10)
 
 # Mopane stem percentage filter
 mopane_per <- 0.5
@@ -122,13 +122,12 @@ tree_ab_mat <- stems_fil %>%
 # Clean and filter tree species abundance matrix
 rownames(tree_ab_mat) <- tree_ab_mat[["plot_cluster"]]
 tree_ab_mat <- tree_ab_mat[,-1, drop=FALSE]  # Remove plot cluster column
-tree_ab_mat <- filter(tree_ab_mat, (tree_ab_mat$`Colophospermum mopane` / rowSums(tree_ab_mat)) < mopane_per)  # Filter mopane plots
 tree_ab_mat <- filter_all(tree_ab_mat, any_vars(. != 0))  # Filter empty plots
 tree_ab_mat <- tree_ab_mat[stems_ha < rowSums(tree_ab_mat) / 0.4,]  # Remove plots with fewer than x stems ha
 
 # Remove plots not in tree abundance matrix
-plots_fil_sf <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat))
+plots_clean <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat))
 
-saveRDS(plots_fil_sf, "dat/plots.rds")
+saveRDS(plots_clean, "dat/plots.rds")
 saveRDS(tree_ab_mat, "dat/tree_ab_mat.rds")
 
