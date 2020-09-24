@@ -8,6 +8,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(ggrepel)
+library(ggnewscale)
 library(viridis)
 library(gridExtra)
 library(sjPlot)
@@ -34,21 +35,23 @@ species_scores <- readRDS("dat/species_scores.rds")
 
 # Define variable name translation lookup
 pred_lookup <- c("Richness", "Evenness", "Stem density",
-    "NMDS 1", "NMDS 2", "NMDS 3",  
-    "MAP", "Diurnal dT")
+    "Vegetation type", "MAP", "Diurnal dT")
 names(pred_lookup) <- c("richness", "evenness", "n_stems_gt5_ha", 
-  "NMDS1", "NMDS2", "NMDS3", 
-  "map", "diurnal_temp_range")
+  "clust4", "map", "diurnal_temp_range")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
   "Greening rate", "Senescence rate", "Season start")
 names(resp_lookup) <- c("cum_vi", "s1_length", 
   "s1_green_rate", "s1_senes_rate", "s1_start")
 
+clust_lookup <- c("Sparse", "Core")
+names(clust_lookup) <- c("1", "2")
+
 # Remove old variables 
 dat_clean <- dat %>%
   dplyr::select(-starts_with("vipphen")) %>%
-  filter(plot_cluster != "ZIS_2385")
+  filter(plot_cluster != "ZIS_2385") %>%
+  mutate(clust4 = factor(clust4, labels = clust_lookup))
 
 # How many sites are there?
 write(
@@ -64,7 +67,7 @@ write(
 # histogram of raw data
 pdf(file =  "img/hist_raw.pdf", width = 12, height = 10)
 dat_clean %>% 
-  dplyr::select(names(pred_lookup)) %>%
+  dplyr::select(names(pred_lookup), -clust4) %>%
   st_drop_geometry() %>%
   as.data.frame() %>%
   gather(variable, value) %>%
@@ -117,7 +120,7 @@ bivar_df <- as.data.frame(do.call(rbind, lapply(bivar_list, function(x) {
   y_var <- sym(unlist(strsplit(x, split = " ~ "))[1])
 
   dat_clean %>% 
-    dplyr::select(!!x_var, !!y_var) %>%
+    dplyr::select(!!x_var, !!y_var, clust4) %>%
     st_drop_geometry() %>%
     rename(pred = !!x_var, resp = !!y_var) %>%
     mutate(x = as.character(x_var), 
@@ -129,14 +132,15 @@ bivar_df$y <- factor(bivar_df$y, levels = names(resp_lookup))
 
 pdf(file = "img/bivar.pdf", width = 15, height = 10)
 ggplot() + 
-  geom_point(data = bivar_df, aes(x = pred, y = resp), 
+  geom_point(data = bivar_df, aes(x = pred, y = resp, fill = clust4), 
 	colour = "black", shape = 21) +
   geom_line(data = bivar_df, aes(x = pred, y = resp),
-	stat = "smooth", method = "lm", se = FALSE, colour = pal[1]) + 
+	stat = "smooth", method = "lm", colour = pal[1], se = FALSE, size = 1.5) + 
   geom_line(data = bivar_df, aes(x = pred, y = resp), 
-	stat = "smooth", method = "loess", colour = pal[2], se = FALSE) + 
+	stat = "smooth", method = "loess", colour = pal[2], se = FALSE, size = 1.5) + 
   facet_grid(y~x, scales = "free", 
     labeller = labeller(y = resp_lookup, x = pred_lookup)) +  
+  scale_fill_manual(name = "", values = clust_pal) + 
   theme_panel() + 
   labs(x = "", y = "")
 dev.off()
@@ -147,11 +151,10 @@ dat_std <- dat_clean %>%
       "richness",
       "evenness", 
       "n_stems_gt5_ha",
-      "NMDS1", "NMDS2", "NMDS3", 
       "map",
       "diurnal_temp_range"),
     .funs = list(std = ~(scale(.) %>% as.vector))) %>%
-  dplyr::select(ends_with("_std"), names(resp_lookup), geometry) %>%
+  dplyr::select(ends_with("_std"), clust4, names(resp_lookup), geometry) %>%
   rename_at(.vars = vars(ends_with("_std")), 
     .funs = list(~gsub("_std", "", .))) %>%
   st_transform(., UTMProj4("35S")) %>%
@@ -161,7 +164,7 @@ dat_std <- dat_clean %>%
 
 # Check for collinearity
 pdf(file = "img/corrplot.pdf", height = 8, width = 8)
-corrPlot(dat_std[,names(pred_lookup)]) + 
+corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "clust4")]]) + 
   scale_x_discrete(labels = pred_lookup) + 
   scale_y_discrete(labels = pred_lookup)
 dev.off()
@@ -182,8 +185,7 @@ phen_mod <- function(var, pre) {
 
   # Define maximal model
   max_mod <- lm(get(var) ~ richness + evenness + n_stems_gt5_ha + 
-    NMDS1 + NMDS2 + NMDS3 +
-    map + diurnal_temp_range, 
+    clust4 + map + diurnal_temp_range, 
     data = dat_std)
 
   # Summary
@@ -203,8 +205,7 @@ phen_mod <- function(var, pre) {
 
   # Reduced model comparison 
   max_mod_ml <- lm(get(var) ~ 
-    richness + evenness + n_stems_gt5_ha + 
-    NMDS1 + NMDS2 + NMDS3 + 
+    richness + evenness + n_stems_gt5_ha + clust4 + 
     map + diurnal_temp_range,
   data = dat_std)
 
@@ -230,31 +231,32 @@ phen_mod("s1_start", "s")
 # spaMM models with spatial autocorrelation ----
 
 # Fit models
-max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt5_ha + NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
+max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt5_ha + 
+    clust4 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_c <- fitme(cum_vi ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_l <- fitme(s1_length ~ richness + evenness + n_stems_gt5_ha + 
-    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
+    clust4 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_l <- fitme(s1_length ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_r <- fitme(s1_green_rate ~ richness + evenness + n_stems_gt5_ha + 
-    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
+    clust4 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_r <- fitme(s1_green_rate ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_d <- fitme(s1_senes_rate ~ richness + evenness + n_stems_gt5_ha + 
-    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
+    clust4 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_d <- fitme(s1_senes_rate ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
 max_mod_spamm_s <- fitme(s1_start ~ richness + evenness + n_stems_gt5_ha + 
-    NMDS1 + NMDS2 + NMDS3 + map + diurnal_temp_range + 
+    clust4 + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_s <- fitme(s1_start ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
@@ -275,7 +277,7 @@ phen_spamm_mod <- function(max_mod, null_mod, pre) {
   resp <- as.character(max_mod$predictor[[2]])
 
   mod_hier <- hier.part(dat_std[[resp]], dat_std %>% 
-    dplyr::select(richness, evenness, n_stems_gt5_ha, NMDS1, NMDS2, NMDS3,
+    dplyr::select(richness, evenness, n_stems_gt5_ha, clust4,
       map, diurnal_temp_range), barplot = FALSE)
 
   # Estimate degree of spatial autocorrelation
@@ -357,6 +359,7 @@ spamm_eff_df <- do.call(rbind, lapply(spamm_list, function(x) {
 
 spamm_eff_df$resp <- factor(spamm_eff_df$resp, levels = names(resp_lookup))
 
+spamm_eff_df$var <- gsub("clust42", "clust4", spamm_eff_df$var)
 spamm_eff_df$var <- factor(spamm_eff_df$var, levels = rev(names(pred_lookup)),
   labels = rev(pred_lookup))
 
@@ -379,7 +382,7 @@ dev.off()
 mod_hier_all <- as.data.frame(do.call(cbind, lapply(spamm_list, function(x) {
   x[[8]]$I.perc[,1]
   })))
-mod_hier_all$var <- pred_lookup 
+mod_hier_all$var <- pred_lookup
 mod_hier_all_clean <- mod_hier_all[,c(length(mod_hier_all),seq(length(mod_hier_all) - 1))]
 names(mod_hier_all_clean) <- c("Predictor", resp_lookup)
 
@@ -402,16 +405,16 @@ nmds_plot <- function(axes = c(1,2), clust = "clust4") {
   ell <- ordiellipse(ord, dat_clean[[clust]], display = "sites", draw = "none",
     kind = "sd", conf = .95, label = T)
 
-  dat_clean[[clust]] <- factor(dat_clean[[clust]])
-
   # Extract ellipses from ordiellipse
   df_ell <- data.frame()
-  for(g in levels(dat_clean[[clust]])){
+  for(g in unique(dat_clean[[clust]])) {
     df_ell <- rbind(df_ell, 
       cbind(as.data.frame(with(dat_clean[dat_clean[[clust]] == g,],
             covEllipse(ell[[g]]$cov, ell[[g]]$center))), group = g))
   }
 
+  group_short <- gsub("\\s.*", "", clust_lookup)
+  
   # Create plots
   x <- sym(paste0("NMDS", axes[1]))
   y <- sym(paste0("NMDS", axes[2]))
@@ -426,9 +429,10 @@ nmds_plot <- function(axes = c(1,2), clust = "clust4") {
       aes(x = !!x, y = !!y, fill = !!colour), colour = "black", shape = 21) +
     geom_path(data = df_ell, 
       aes(x = !!x, y = !!y, colour = group), size = 1) + 
-    geom_label(data = annot_df, 
-      aes(x = !!x, y = !!y, label = group, colour = group)) + 
-    scale_colour_hue(l = 20) + 
+    geom_label_repel(data = annot_df, 
+      aes(x = !!x, y = !!y, label = group, colour = group)) +
+    scale_colour_manual(values = clust_pal) + 
+    scale_fill_manual(values = clust_pal) + 
     theme_panel() + 
     theme(legend.position = "none")
 
@@ -450,23 +454,14 @@ s1_length_tile <- as.data.frame(
 pdf(file = "img/plot_loc.pdf", height = 8, width = 10)
 ggplot() +
   geom_tile(data = s1_length_tile, aes(x = x, y = y, fill = X3)) +
+  scale_fill_gradient(name = "Season length\n(days)", low = "black" , high = pal[6], 
+    limits = c(100, 300)) + 
+  new_scale_fill() +
   geom_sf(data = zambia, colour = "black", fill = NA) +
-  geom_sf(data = dat_clean, colour = "black", fill = pal[6], shape = 24, size = 3) +
-  scale_fill_viridis(name = "Season length\n(days)", limits = c(100, 300)) + 
+  geom_sf(data = dat_clean, aes(fill = clust4), 
+    colour = "black", shape = 24, size = 3) +
   theme_panel() + 
+  scale_fill_manual(name = "", values = clust_pal) + 
   labs(x = "", y = "")
 dev.off()
 
-# How does species _composition_ affect phenology?
-
-##' PCOA 1 has negative influence on season length, PCOA 2 has positive 
-spamm_list[[2]][[2]]$beta_table
-
-##' PCOA 1, 2 and 3 have positive influence on rate of greening
-spamm_list[[3]][[2]]$beta_table
-
-##' PCOA 1 has positive influence on season start
-spamm_list[[5]][[2]]$beta_table
-
-# What to export to show spatial autocorrelation effects?
-##' Rho and nu from model summary objects?

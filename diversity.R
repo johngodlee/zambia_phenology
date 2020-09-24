@@ -32,7 +32,7 @@ dev.off()
 
 # Run NMDS
 nmds <- metaMDS(ab_mat_clean, distance = "jaccard", try = 100, 
-  trymax = 150, k = 4, autotransform = FALSE)
+  trymax = 150, k = 6, autotransform = FALSE)
 
 # Check output
 pdf(file = "img/nmds_stress.pdf", width = 5, height = 5)
