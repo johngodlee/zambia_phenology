@@ -277,7 +277,7 @@ NMDS.scree <- function(x, dims = 10, ...) {
 
   # Create list of metaMDS objects
   meta_list <- lapply(dim_vec, function(y) {
-    metaMDS(x, autotransform = F, k = y, ...)
+    metaMDS(x, k = y, ...)
   })
 
   # Extract stress values
