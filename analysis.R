@@ -22,13 +22,15 @@ library(vegan)
 source("functions.R")
 
 # Import data 
-dat <- readRDS("dat/plots_phen.rds")
+dat <- readRDS("dat/plots_vipphen.rds")
 
 phen_stack <- readRDS("dat/vipphen_stack.rds")
 
 af <- st_read("/Volumes/john/africa_countries/africa.shp")
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
+
+evi_ts <- readRDS("dat/evi_ts.rds")
 
 nmds <- readRDS("dat/nmds.rds")
 species_scores <- readRDS("dat/species_scores.rds")
@@ -49,8 +51,7 @@ names(clust_lookup) <- c("1", "2")
 
 # Remove old variables 
 dat_clean <- dat %>%
-  dplyr::select(-starts_with("vipphen")) %>%
-  filter(plot_cluster != "ZIS_2385") %>%
+  filter(!plot_cluster %in% c("ZIS_3765", "ZIS_2385")) %>%
   mutate(clust4 = factor(clust4, labels = clust_lookup))
 
 # How many sites are there?
@@ -63,6 +64,65 @@ write(
 #  file.remove(list.files("dat/shp", "loc.*", full.names = TRUE))
 #}
 #st_write(dat, "dat/shp/loc.shp")
+
+# Create time series plots
+pdf(file = "img/ts.pdf", width = 12, height = 8)
+ggplot() +
+  geom_path(data = evi_ts_clean, aes(x = date, y = evi, group = plot_cluster),
+    alpha = 0.2) +
+  scale_x_date(date_labels = "%Y-%b", date_breaks = "3 months") +
+  theme_panel() +
+  theme(legend.position = "none", 
+    axis.text = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
+    panel.grid.minor = element_blank())
+dev.off()
+
+pdf(file = "img/ts_smooth.pdf", width = 12, height = 8)
+evi_ts_clean %>%
+  filter(plot_cluster %in% 
+    unique(.$plot_cluster)[sample(seq(length(unique(.$plot_cluster))), 50)]) %>%
+  ggplot(aes(x = doy, y = evi)) + 
+    geom_path(aes(group = season), colour = pal[1]) + 
+    stat_smooth(method = "loess", span = loess_span, colour = "black") + 
+    facet_wrap(~plot_cluster) +
+    theme_panel() + 
+    theme(legend.position = "none",
+      strip.text = element_blank(),
+      axis.text.x = element_text(size=12, angle=90, vjust=0.5)) + 
+    labs(x = "Days from 1st Jan.", y = "EVI")
+dev.off()
+
+pdf(file = "img/ts_season_year.pdf", width = 10, height = 8)
+ggplot() + 
+  geom_path(data = filter(evi_ts_clean, plot_cluster == "ZIS_101"), 
+    aes(x = date, y = evi, colour = season, linetype = year))
+dev.off()
+
+# Compare VIPPHEN and 250 m
+old_gather <- dat_clean %>%
+  dplyr::select(plot_cluster, contains("vipphen"), -vipphen_bg_vi) %>%
+  st_drop_geometry() %>%
+  gather(key, old, -plot_cluster) %>%
+  mutate(key = gsub("^vipphen_", "", .$key))
+
+compare <- dat_clean %>%
+  dplyr::select(plot_cluster, avg_vi, cum_vi, starts_with("s1")) %>%
+  st_drop_geometry() %>%
+  gather(key, new, -plot_cluster) %>%
+  left_join(., old_gather, by = c("plot_cluster", "key")) %>%
+  filter(!key %in% c("min_vi", "max_vi"), 
+  !(old < 150 & key == "s1_start"))
+
+pdf(file = "img/old_new_compare.pdf", width = 12, height = 8)
+ggplot() + 
+  geom_point(data = compare, aes(x = old, y = new), 
+    alpha = 0.8, colour = "black", fill = pal[5], shape = 21) + 
+  geom_smooth(data = compare, aes(x = old, y = new), 
+    method = "lm", colour = pal[1]) + 
+  facet_wrap(~key, scales = "free") + 
+  theme_panel() + 
+  labs(x = "MODIS VIPPHEN", y = "MOD13Q1")
+dev.off()
 
 # histogram of raw data
 pdf(file =  "img/hist_raw.pdf", width = 12, height = 10)

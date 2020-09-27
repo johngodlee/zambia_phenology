@@ -9,46 +9,31 @@ library(dplyr)
 library(ggplot2)
 library(gridExtra)
 library(zoo)
+library(lubridate)
 
 source("functions.R")
+
+# Import data
+dat <- readRDS("dat/plots.rds")
 
 # Read .csv files per granule 
 csv_files <- list.files("dat", "*_extract.csv", full.names = TRUE)
 csv_list <- lapply(csv_files, read.csv)
 
 # Check that no plots have been included in both granules 
-intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[2]]$plot_cluster))
+any(
+  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[2]]$plot_cluster)),
+  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
+  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
+  intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
+  intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
+  intersect(unique(csv_list[[3]]$plot_cluster), unique(csv_list[[4]]$plot_cluster))
+  )
 
 # Join csv files
 evi_ts_df <- do.call(rbind, csv_list)
-evi_ts_df$date <- as.Date(evi_ts_df$date)
-
-# Exclude a plot with obviously corrupted data
-plot_corrupt <- evi_ts_df %>% 
-  filter(date > as.Date("2019-08-01") & 
-    date < as.Date("2019-09-01") & 
-    evi > 60000000) %>% 
-  pull(plot_cluster) %>%
-  unique()
-
-evi_ts_clean <- evi_ts_df %>%
-  filter(plot_cluster != plot_corrupt)
-
-# Downscale EVI measurements
-##' divided by a million
-evi_ts_clean$evi <- evi_ts_clean$evi * 0.000001
-
-# Plot all time series
-pdf(file = "img/ts.pdf", width = 12, height = 8)
-ggplot() +
-  geom_path(data = evi_ts_clean, aes(x = date, y = evi, group = plot_cluster),
-    alpha = 0.2) +
-  scale_x_date(date_labels = "%Y-%b", date_breaks = "3 months") +
-  theme_panel() +
-  theme(legend.position = "none", 
-    axis.text = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
-    panel.grid.minor = element_blank())
-dev.off()
+evi_ts_df$date <- unlist(lapply(evi_ts_df$date, as.Date, 
+    tryFormats = c("%Y-%m-%d", "%d/%m/%Y")))
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 seasonGet <- function(x, min_date, max_date, date = "date") {
@@ -67,7 +52,6 @@ seasonGet <- function(x, min_date, max_date, date = "date") {
   # Recenter days on start of year in middle of growing season
   out$doy <- as.numeric(out$date - as.Date(paste0(format(as.Date(max_date), "%Y"), "-01-01")))
     
-
   return(out)
 }
 
@@ -85,34 +69,16 @@ evi_seas_list <- lapply(evi_ts_list, function(x) {
 
 evi_clean <- do.call(rbind, 
   do.call(rbind, evi_seas_list)
-)
+  ) %>%
+  filter(!is.na(evi))
+
+saveRDS(evi_clean, "dat/evi_ts.rds")
 
 loess_span <- 0.25
 
 write(
   commandOutput(loess_span, "loessSpan"),
   file="out/vars.tex", append=TRUE)
-
-pdf(file = "img/ts_smooth.pdf", width = 12, height = 8)
-evi_clean %>%
-  filter(plot_cluster %in% 
-    unique(.$plot_cluster)[sample(seq(length(unique(.$plot_cluster))), 50)]) %>%
-  ggplot(aes(x = doy, y = evi)) + 
-    geom_path(aes(group = season), colour = pal[1]) + 
-    stat_smooth(method = "loess", span = loess_span, colour = "black") + 
-    facet_wrap(~plot_cluster) +
-    theme_panel() + 
-    theme(legend.position = "none",
-      strip.text = element_blank(),
-      axis.text.x = element_text(size=12, angle=90, vjust=0.5)) + 
-    labs(x = "Days from 1st Jan.", y = "EVI")
-dev.off()
-
-pdf(file = "img/ts_season_year.pdf", width = 10, height = 8)
-ggplot() + 
-  geom_path(data = filter(evi_clean, plot_cluster == "ZIS_1"), 
-    aes(x = date, y = evi, colour = season, linetype = year))
-dev.off()
 
 # Compute yearly curves for each plot
 evi_split <- split(evi_clean, evi_clean$plot_cluster)
@@ -231,7 +197,15 @@ phen_df$cum_vi <- unlist(lapply(seq(length(loess_fil)), function(x) {
   sum(diff(loess_fil[[x]][["doy"]])*rollmean(loess_min,2))
 }))
 
-# Make a plot which demonstrates all the different numeric statistics
+# Join with original plot data
+phen_all <- dat %>%
+  left_join(., phen_df, by = "plot_cluster") %>% 
+  filter(!is.na(s1_start))
+
+# Write data 
+saveRDS(phen_all, "dat/plots_phen.rds")
+
+# Make a plot which demonstrates all the different numeric phenology stats
 growth_stat_plot <- function(x, raw = FALSE) {
   # Predict values of greenup and senescence rate
   if (class(s1_greenup_mod_list[[x]]) == "lm") {
@@ -283,7 +257,6 @@ grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
 dev.off()
 
 # Example plot on its own
-
 ts_example_plot <- growth_stat_plot(100, raw = TRUE)
 
 pdf(file = "img/ts_example.pdf", width = 8, height = 6)
@@ -292,33 +265,5 @@ ts_example_plot +
     axis.title = element_text(size = 12))
 dev.off()
 
-# Load 0.05 degree data to see how they match up
-old_dat <- readRDS("dat/plots_vipphen.rds")
-old_gather <- old_dat %>%
-  dplyr::select(plot_cluster, contains("s1"), vipphen_cum_vi, vipphen_avg_vi) %>%
-  st_drop_geometry() %>%
-  gather(key, old, -plot_cluster) %>%
-  mutate(key = gsub("^vipphen_", "", .$key))
 
-compare <- phen_df %>%
-  gather(key, new, -plot_cluster) %>%
-  left_join(., old_gather, by = c("plot_cluster", "key")) %>%
-  filter(!key %in% c("min_vi", "max_vi"), 
-  !(old < 150 & key == "s1_start"))
 
-pdf(file = "img/old_new_compare.pdf", width = 12, height = 8)
-ggplot() + 
-  geom_point(data = compare, aes(x = old, y = new), 
-    alpha = 0.8, colour = "black", fill = pal[5], shape = 21) + 
-  geom_smooth(data = compare, aes(x = old, y = new), 
-    method = "lm", colour = pal[1]) + 
-  facet_wrap(~key, scales = "free") + 
-  theme_panel() + 
-  labs(x = "MODIS VIPPHEN", y = "MOD13Q1")
-dev.off()
-
-phen_all <- old_dat %>%
-  left_join(., phen_df, by = "plot_cluster") %>% 
-  filter(!is.na(s1_start))
-
-saveRDS(phen_all, "dat/plots_phen.rds")

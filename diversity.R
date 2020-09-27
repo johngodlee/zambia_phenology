@@ -16,23 +16,26 @@ source("functions.R")
 # Import data
 tree_ab_mat <- readRDS("dat/tree_ab_mat.rds")
 
-plots <- readRDS("dat/plots.rds") 
+plots <- readRDS("dat/plots_phen.rds") 
 
 # Exclude plot with mental species composition
-t(tree_ab_mat[row.names(tree_ab_mat) == "ZIS_2385",]) %>%
-  as.data.frame() %>%
-  filter(ZIS_2385 > 0)
-##" Only Pterocarpus lucens
-ab_mat_clean <- tree_ab_mat[row.names(tree_ab_mat) != "ZIS_2385",]
+# Exclude species with only one occurrence
+ab_mat_clean <- tree_ab_mat %>%
+  dplyr::select(which(!colSums(., na.rm=TRUE) %in% 1)) %>%
+  filter(!row.names(.) %in% c("ZIS_2385", "ZIS_3765"),
+    row.names(.) %in% unique(plots$plot_cluster)) 
 
 # NMDS dimensions
 pdf(file = "img/nmds_scree.pdf", width = 5, height = 5)
-NMDS.scree(ab_mat_clean, trys = 10)
+NMDS.scree(ab_mat_clean, trys = 10, distance = "jaccard")
 dev.off()
 
 # Run NMDS
-nmds <- metaMDS(ab_mat_clean, distance = "jaccard", try = 100, 
-  trymax = 150, k = 6, autotransform = FALSE)
+##' 9 dimensions keeps stress below 0.1
+##' 3 dimensions keeps below 0.15
+nmds <- metaMDS(ab_mat_clean,
+  autotransform = TRUE, distance = "bray", try = 20, trymax = 20, 
+  k = 4, stepacross = TRUE)
 
 # Check output
 pdf(file = "img/nmds_stress.pdf", width = 5, height = 5)
