@@ -51,7 +51,6 @@ names(clust_lookup) <- c("1", "2")
 
 # Remove old variables 
 dat_clean <- dat %>%
-  filter(!plot_cluster %in% c("ZIS_3765", "ZIS_2385")) %>%
   mutate(clust4 = factor(clust4, labels = clust_lookup))
 
 # How many sites are there?
@@ -68,7 +67,7 @@ write(
 # Create time series plots
 pdf(file = "img/ts.pdf", width = 12, height = 8)
 ggplot() +
-  geom_path(data = evi_ts_clean, aes(x = date, y = evi, group = plot_cluster),
+  geom_path(data = evi_ts, aes(x = date, y = evi, group = plot_cluster),
     alpha = 0.2) +
   scale_x_date(date_labels = "%Y-%b", date_breaks = "3 months") +
   theme_panel() +
@@ -78,7 +77,7 @@ ggplot() +
 dev.off()
 
 pdf(file = "img/ts_smooth.pdf", width = 12, height = 8)
-evi_ts_clean %>%
+evi_ts %>%
   filter(plot_cluster %in% 
     unique(.$plot_cluster)[sample(seq(length(unique(.$plot_cluster))), 50)]) %>%
   ggplot(aes(x = doy, y = evi)) + 
@@ -94,7 +93,7 @@ dev.off()
 
 pdf(file = "img/ts_season_year.pdf", width = 10, height = 8)
 ggplot() + 
-  geom_path(data = filter(evi_ts_clean, plot_cluster == "ZIS_101"), 
+  geom_path(data = filter(evi_ts, plot_cluster == "ZIS_101"), 
     aes(x = date, y = evi, colour = season, linetype = year))
 dev.off()
 
@@ -501,6 +500,7 @@ nmds_plot <- function(axes = c(1,2), clust = "clust4") {
 
 p1 <- nmds_plot(c(1,2), "clust4")
 p2 <- nmds_plot(c(1,3), "clust4")
+p3 <- nmds_plot(c(2,3), "clust4")
 
 pdf(file = "img/nmds.pdf", width = 12, height = 6)
 grid.arrange(p1, p2, ncol = 2)

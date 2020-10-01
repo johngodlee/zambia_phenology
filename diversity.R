@@ -27,15 +27,16 @@ ab_mat_clean <- tree_ab_mat %>%
 
 # NMDS dimensions
 pdf(file = "img/nmds_scree.pdf", width = 5, height = 5)
-NMDS.scree(ab_mat_clean, trys = 10, distance = "jaccard")
+NMDS.scree(ab_mat_clean, try = 10, trymax = 10, dims = 10, 
+  distance = "bray", autotransform = FALSE, stepacross = TRUE)
 dev.off()
 
 # Run NMDS
 ##' 9 dimensions keeps stress below 0.1
 ##' 3 dimensions keeps below 0.15
-nmds <- metaMDS(ab_mat_clean,
-  autotransform = TRUE, distance = "bray", try = 20, trymax = 20, 
-  k = 4, stepacross = TRUE)
+nmds <- metaMDS(ab_mat_clean, k = 6,
+  autotransform = FALSE, distance = "bray", try = 150, trymax = 150, 
+  stepacross = TRUE) 
 
 # Check output
 pdf(file = "img/nmds_stress.pdf", width = 5, height = 5)
@@ -67,6 +68,7 @@ div_df <- data.frame(plot_cluster = row.names(tree_ab_mat),
 plots_div <- plots %>%
   left_join(., plot_scores, by = "plot_cluster") %>%
   left_join(., div_df, by = "plot_cluster") %>% 
+  filter(plot_cluster %in% row.names(nmds$points)) %>%
   filter(!is.na(richness))
 
 saveRDS(plots_div, "dat/plots_div.rds") 

@@ -4,6 +4,7 @@ img/**
 old/**
 out/**
 reading/**
+comments/**
 
 *.tif
 

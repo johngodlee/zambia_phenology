@@ -294,3 +294,5 @@ covEllipse <- function(cov, center = c(0, 0), scale = 1, npoints = 100) {
   circle <- cbind(cos(theta), sin(theta))
   t(center + scale * t(circle %*% chol(cov)))
 }
+
+loess_span <- 0.25
