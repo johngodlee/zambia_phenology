@@ -74,8 +74,6 @@ evi_clean <- do.call(rbind,
 
 saveRDS(evi_clean, "dat/evi_ts.rds")
 
-loess_span <- 0.25
-
 write(
   commandOutput(loess_span, "loessSpan"),
   file="out/vars.tex", append=TRUE)
