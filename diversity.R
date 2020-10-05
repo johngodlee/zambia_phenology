@@ -25,6 +25,18 @@ ab_mat_clean <- tree_ab_mat %>%
   filter(!row.names(.) %in% c("ZIS_2385", "ZIS_3765"),
     row.names(.) %in% unique(plots$plot_cluster)) 
 
+# DCA
+dca <- decorana(ab_mat_clean)
+
+plot_scores <- as.data.frame(dca$rproj[,c(1,2)])
+plot_scores$plot_cluster <- row.names(plot_scores)
+
+plot_scores_join <- left_join(plot_scores, plots, by = "plot_cluster")
+
+ggplot() + 
+  geom_point(data = plot_scores_join, 
+    aes(x = DCA1, y = DCA2, colour = as.character(clust4)))
+
 # NMDS dimensions
 pdf(file = "img/nmds_scree.pdf", width = 5, height = 5)
 NMDS.scree(ab_mat_clean, try = 10, trymax = 10, dims = 10, 
