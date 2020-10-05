@@ -91,7 +91,6 @@ saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 # Filter stems by plots
 stems_fil <- stems %>%
   inner_join(., plot_id_lookup, by = "plot_id") %>%
-  dplyr::select(-plot_id) %>%
   filter(diam >= 10)
 
 # Mopane stem percentage filter
@@ -101,12 +100,28 @@ stems_ha <- 50
 write(
   c(
     commandOutput(stems_ha, "stemsHa"),
-    commandOutput(mopane_per, "mopanePer")
+    commandOutput(mopane_per*100, "mopanePer")
   ),
   file="out/vars.tex", append=TRUE)
 
+tree_ab_mat_plot <- stems_fil %>% 
+  dplyr::select(plot_id, tree_id, species_name_clean) %>%
+  filter(!is.na(species_name_clean)) %>%
+  group_by(plot_id, tree_id) %>%
+  filter(row_number() == 1) %>%
+  group_by(plot_id, species_name_clean, .drop = FALSE) %>%
+  tally() %>%
+  spread(species_name_clean, n, fill = 0) %>%
+  ungroup() %>%
+  mutate_at(vars(-plot_id), as.double) %>%
+  as.data.frame() %>%
+  dplyr::select(-`Indet indet`)
+
+rownames(tree_ab_mat_plot) <- tree_ab_mat_plot[["plot_id"]]
+tree_ab_mat_plot <- tree_ab_mat_plot[,-1, drop=FALSE]  # Remove plot_id 
+
 # Create tree species abundance matrix
-tree_ab_mat <- stems_fil %>% 
+tree_ab_mat_clust <- stems_fil %>% 
   dplyr::select(plot_cluster, tree_id, species_name_clean) %>%
   filter(!is.na(species_name_clean)) %>%
   group_by(plot_cluster, tree_id) %>%
@@ -120,14 +135,15 @@ tree_ab_mat <- stems_fil %>%
   dplyr::select(-`Indet indet`)
 
 # Clean and filter tree species abundance matrix
-rownames(tree_ab_mat) <- tree_ab_mat[["plot_cluster"]]
-tree_ab_mat <- tree_ab_mat[,-1, drop=FALSE]  # Remove plot cluster column
-tree_ab_mat <- filter_all(tree_ab_mat, any_vars(. != 0))  # Filter empty plots
-tree_ab_mat <- tree_ab_mat[stems_ha < rowSums(tree_ab_mat) / 0.4,]  # Remove plots with fewer than x stems ha
+rownames(tree_ab_mat_clust) <- tree_ab_mat_clust[["plot_cluster"]]
+tree_ab_mat_clust <- tree_ab_mat_clust[,-1, drop=FALSE]  # Remove plot cluster column
+tree_ab_mat_clust <- filter_all(tree_ab_mat_clust, any_vars(. != 0))  # Filter empty plots
+tree_ab_mat_clust <- tree_ab_mat_clust[stems_ha < rowSums(tree_ab_mat_clust) / 0.4,]  # Remove plots with fewer than x stems ha
 
 # Remove plots not in tree abundance matrix
-plots_clean <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat))
+plots_clean <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat_clust))
 
 saveRDS(plots_clean, "dat/plots.rds")
-saveRDS(tree_ab_mat, "dat/tree_ab_mat.rds")
+saveRDS(tree_ab_mat_clust, "dat/tree_ab_mat.rds")
+saveRDS(tree_ab_mat_plot, "dat/tree_ab_mat_plot.rds")
 

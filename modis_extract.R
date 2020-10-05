@@ -10,6 +10,7 @@ library(ggplot2)
 library(gridExtra)
 library(zoo)
 library(lubridate)
+library(mgcv)
 
 source("functions.R")
 
@@ -37,6 +38,9 @@ evi_ts_df$date <- unlist(lapply(evi_ts_df$date, as.Date,
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 seasonGet <- function(x, min_date, max_date, date = "date") {
+  # Format date as date
+  x[[date]] <- as.Date(x[[date]])
+
   # Subset data between max and min dates
   out <- x[x[[date]] > as.Date(min_date) & x[[date]] < as.Date(max_date),]
 
@@ -55,7 +59,7 @@ seasonGet <- function(x, min_date, max_date, date = "date") {
   return(out)
 }
 
-evi_ts_list <- split(evi_ts_clean, evi_ts_clean$plot_cluster)
+evi_ts_list <- split(evi_ts_df, evi_ts_df$plot_cluster)
 
 evi_seas_list <- lapply(evi_ts_list, function(x) {
   list(
@@ -84,9 +88,9 @@ evi_split <- split(evi_clean, evi_clean$plot_cluster)
 pred_data <- seq(min(evi_split[[1]]$doy), max(evi_split[[1]]$doy))
 
 loess_list <- lapply(evi_split, function(x) {
-  mod <- loess(evi ~ doy, data = x, span = loess_span)
-  pred <- predict(mod, newdata = pred_data) 
-  data.frame(pred, doy = pred_data)
+  mod <- gam(evi ~ s(doy), data = x)
+  pred <- predict(mod, newdata = data.frame(doy = pred_data))
+  out <- data.frame(pred, doy = pred_data)
 })
 
 # Calculate key statistics: 

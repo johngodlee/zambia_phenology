@@ -15,10 +15,11 @@ source("functions.R")
 
 # Import data
 tree_ab_mat <- readRDS("dat/tree_ab_mat.rds")
+tree_ab_mat_plot <- readRDS("dat/tree_ab_mat_plot.rds")
 
 plots <- readRDS("dat/plots_phen.rds") 
 
-# Exclude plot with mental species composition
+# Exclude clusters with mental species composition
 # Exclude species with only one occurrence
 ab_mat_clean <- tree_ab_mat %>%
   dplyr::select(which(!colSums(., na.rm=TRUE) %in% 1)) %>%
@@ -82,6 +83,31 @@ plots_div <- plots %>%
   left_join(., div_df, by = "plot_cluster") %>% 
   filter(plot_cluster %in% row.names(nmds$points)) %>%
   filter(!is.na(richness))
+
+# Test Beta diversity between plots in a cluster
+
+# Filter to plots we're using
+tree_ab_mat_plot_fil <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% unlist(strsplit(plots_div$plot_id, ",")) & rowSums(tree_ab_mat_plot) != 0,]
+
+plot_dist <- vegdist(tree_ab_mat_plot_fil)
+
+plot_group_reps <- unlist(lapply(strsplit(plots_div$plot_id, ","), function(x) {
+  length(x[x %in% row.names(tree_ab_mat_plot_fil)])
+  }))
+
+plot_group <- unlist(lapply(seq(nrow(plots_div)), function(x) {
+  rep(plots_div$plot_cluster[x], times = plot_group_reps[x])
+  }))
+
+bets <- betadisper(plot_dist, plot_group)
+
+anova(bets)
+
+plot(bets,label = NA)
+
+boxplot(bets)
+
+anos <- anosim(plot_dist, plot_group, permutations = 200)
 
 saveRDS(plots_div, "dat/plots_div.rds") 
 
