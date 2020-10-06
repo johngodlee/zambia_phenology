@@ -11,6 +11,7 @@ library(gridExtra)
 library(zoo)
 library(lubridate)
 library(mgcv)
+library(gratia)
 
 source("functions.R")
 
@@ -87,116 +88,137 @@ evi_split <- split(evi_clean, evi_clean$plot_cluster)
 
 pred_data <- seq(min(evi_split[[1]]$doy), max(evi_split[[1]]$doy))
 
-loess_list <- lapply(evi_split, function(x) {
+gam_list <- lapply(evi_split, function(x) {
   mod <- gam(evi ~ s(doy), data = x)
   pred <- predict(mod, newdata = data.frame(doy = pred_data))
-  out <- data.frame(pred, doy = pred_data)
+  out <- list(mod = mod, pred = data.frame(pred, doy = pred_data))
 })
 
 # Calculate key statistics: 
-phen_df <- data.frame(plot_cluster = names(loess_list))
+phen_df <- data.frame(plot_cluster = names(gam_list))
 
 # Max and min
-phen_df$max_vi <- unlist(lapply(loess_list, function(x) {max(x[1:355, "pred"])}))
-phen_df$min_vi <- unlist(lapply(loess_list, function(x) {min(x[1:355, "pred"])}))
+phen_df$max_vi <- unlist(lapply(gam_list, function(x) {max(x[[2]][1:355, "pred"])}))
+phen_df$min_vi <- unlist(lapply(gam_list, function(x) {min(x[[2]][1:355, "pred"])}))
 
-# Create list of minimas by position
-min_list <- lapply(seq(length(loess_list)), function(x) {
-  # Create zoo ts object
-  xz <- as.zoo(loess_list[[x]][["pred"]])
 
-  # Get position of max val
-  max_pos <- which(xz == phen_df[x, "max_vi"])
+slc <- 5
 
-  # Subset to left and right of max val
-  left <- xz[1:max_pos]
-  right <- xz[max_pos:length(xz)]
+# Start and end of growing season
+##' Using first derivatives of GAM
+##' Start = slope first +5
+##' End = slope last -5
+phen_df$s1_start <- unlist(lapply(gam_list, function(x) {
+  mod <- x[[1]] 
 
-  # Take lowest minimum to left and right of max 
-  return(c(which(xz == min(left)), which(xz == min(right))))
-})
+  der <- derivatives(mod)
 
-## Subset each loess to within the minimas
-loess_fil <- lapply(seq(length(loess_list)), function(x) {
-  loess_list[[x]][seq(from = min_list[[x]][1], to = min_list[[x]][length(min_list[[x]])]),]
-})
-
-# Average VI (avg_vi)
-##' Mean of all values within growing season
-phen_df$avg_vi <- unlist(lapply(loess_fil, function(x) {mean(x[["pred"]])}))
-
-# Season start date (s1_start)
-##' Date when EVI rises 10% above minimum 
-
-## Extract season start doy
-phen_df$s1_start <- unlist(lapply(seq(length(loess_fil)), function(x) {
-  min_val <- loess_list[[x]][min_list[[x]][1], "pred"] 
-  start_val <- min_val + (min_val * 0.1)
-  loess_fil[[x]][min(which(loess_fil[[x]][["pred"]] > start_val)), "doy"]
+  round(pull(der[which(der$derivative >= slc), "data"])[1])
 }))
 
-# Season end date (s1_end)
-##' Date after start when EVI falls below 10% above minimum 
-phen_df$s1_end <- unlist(lapply(seq(length(loess_fil)), function(x) {
-  min_val <- loess_list[[x]][min_list[[x]][1], "pred"] 
-  start_val <- min_val + (min_val * 0.1)
-  loess_fil[[x]][max(which(loess_fil[[x]][["pred"]] > start_val)), "doy"]
+phen_df$s1_end <- unlist(lapply(gam_list, function(x) {
+  mod <- x[[1]] 
+
+  der <- derivatives(mod)
+
+  round(last(pull(der[which(der$derivative <= -slc), "data"])))
 }))
 
-loess_fil <- lapply(seq(length(loess_fil)), function(x) {
-  loes <- loess_fil[[x]]
-  loes[loes$doy >= phen_df[x, "s1_start"] & loes$doy <= phen_df[x, "s1_end"],]
-})
-
-# Season length (s1_length)
+# Season length
 ##' Days between start and end
 phen_df$s1_length <- phen_df$s1_end - phen_df$s1_start
 
-# Greening rate (s1_green_rate)
-##' Slope of Linear regression between start (10%) and max
-s1_greenup_mod_list <- lapply(seq(length(loess_fil)), function(x) {
-  loes <- loess_fil[[x]]
-  greenup_fil <- loes[loes[["doy"]] < loes[which(loes[["pred"]] == phen_df[x, "max_vi"]), "doy"],]
-  if (nrow(greenup_fil) == 0) {
-    return(NA)
-  } else {
-    return(lm(pred ~ doy, data = greenup_fil))
-  }
+
+# Subset GAM predicted values to within start and end of season
+gam_fil <- lapply(seq(length(gam_list)), function(x) {
+  mod <- gam_list[[x]][[2]]
+  mod[mod$doy >= phen_df[x, "s1_start"] & mod$doy <= phen_df[x, "s1_end"],]
 })
 
-phen_df$s1_green_rate <- unlist(lapply(s1_greenup_mod_list, function(x) {
-  if (is.atomic(x)) {
-    return(NA)
+# Average VI 
+##' Mean of all values within growing season
+phen_df$avg_vi <- unlist(lapply(gam_fil, function(x) {mean(x[["pred"]])}))
+
+# Greening rate (s1_green_rate)
+##' First +5 to second +5
+s1_greenup_mod_list <- lapply(seq(length(gam_list)), function(x) {
+  mod <- gam_list[[x]][[1]]
+  pred <- gam_list[[x]][[2]]
+
+  # Get first derivative of gam
+  der <- as.data.frame(derivatives(mod))
+
+  # Filter first derivative to within season
+  der_fil <- der[der$data >= phen_df[x, "s1_start"] & 
+    der$data <= phen_df[x, "s1_end"],] 
+
+  # Define start of greening period
+  doy_green_start <- round(der_fil[1, "data"])
+
+  # Define end of greening period
+  doy_green_end <- first(der_fil[der_fil$derivative <= slc, "data"])
+  
+  # Subset gam predicted values
+  pred_green <- pred[pred$doy >= doy_green_start & pred$doy <= doy_green_end,]
+
+  # Linear model
+  mod_green <- lm(pred ~ doy, data = pred_green)
+
+  # Extract slope
+  if (is.atomic(mod_green)) {
+    slope <- NA
   } else {
-    return(x$coefficients[2])
+    slope <- unname(mod_green$coefficients[2])
   }
-}))
+
+  list(mod = mod_green, slope = slope)
+})
+
+phen_df$s1_green_rate <- unlist(lapply(s1_greenup_mod_list, `[[`, 2))
 
 # Senescence rate (s1_senes_rate)
-##' Slope of Linear regression between max and end (10%)
-s1_senes_mod_list <- lapply(seq(length(loess_fil)), function(x) {
-  loes <- loess_fil[[x]]
-  greenup_fil <- loes[loes[["doy"]] > loes[which(loes[["pred"]] == phen_df[x, "max_vi"]), "doy"],]
-  if (nrow(greenup_fil) == 0) {
-    return(NA)
+##' Second to last -5 to last -5 
+s1_senes_mod_list <- lapply(seq(length(gam_list)), function(x) {
+  mod <- gam_list[[x]][[1]]
+  pred <- gam_list[[x]][[2]]
+
+  # Get first derivative of gam
+  der <- as.data.frame(derivatives(mod))
+
+  # Filter first derivative to within season
+  der_fil <- der[der$data > phen_df[x, "s1_start"] & 
+    der$data < phen_df[x, "s1_end"],] 
+
+  # Define start of senescence period
+  doy_senes_start <- last(der_fil[der_fil$derivative >= -slc, "data"])
+
+  # Define end of senescence period
+  doy_senes_end <- round(der_fil[nrow(der_fil), "data"])
+
+  # Subset gam predicted values
+  pred_senes <- pred[pred$doy >= doy_senes_start & pred$doy <= doy_senes_end,]
+
+  # Linear model
+  mod_senes <- lm(pred ~ doy, data = pred_senes)
+
+  # Extract slope
+  if (is.atomic(mod_senes)) {
+    slope <- NA
   } else {
-    return(lm(pred ~ doy, data = greenup_fil))
+    slope <- unname(mod_senes$coefficients[2])
   }
+  
+
+  list(mod = mod_senes, slope = slope)
 })
 
-phen_df$s1_senes_rate <- unlist(lapply(s1_senes_mod_list, function(x) {
-  if (is.atomic(x)) {
-    return(NA)
-  } else {
-    return(x$coefficients[2])
-  }
-}))
+phen_df$s1_senes_rate <- unlist(lapply(s1_senes_mod_list, `[[`, 2))
 
-# Cumulative VI (cum_vi)
+# Cumulative VI 
 ##' Area under curve between start and end, minus minimum
-phen_df$cum_vi <- unlist(lapply(seq(length(loess_fil)), function(x) {
-  loess_min <- loess_fil[[x]][["pred"]] - phen_df[x, "min_vi"] 
-  sum(diff(loess_fil[[x]][["doy"]])*rollmean(loess_min,2))
+phen_df$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
+  gam_min <- gam_fil[[x]][["pred"]] - phen_df[x, "min_vi"] 
+  sum(diff(gam_fil[[x]][["doy"]])*rollmean(gam_min,2))
 }))
 
 # Join with original plot data
@@ -210,15 +232,15 @@ saveRDS(phen_all, "dat/plots_phen.rds")
 # Make a plot which demonstrates all the different numeric phenology stats
 growth_stat_plot <- function(x, raw = FALSE) {
   # Predict values of greenup and senescence rate
-  if (class(s1_greenup_mod_list[[x]]) == "lm") {
-  greenup_pred <- predict(s1_greenup_mod_list[[x]])
-  greenup_pred_df <- data.frame(doy = s1_greenup_mod_list[[x]]$model$doy, 
+  if (class(s1_greenup_mod_list[[x]][[1]]) == "lm") {
+  greenup_pred <- predict(s1_greenup_mod_list[[x]][[1]])
+  greenup_pred_df <- data.frame(doy = s1_greenup_mod_list[[x]][[1]]$model$doy, 
     pred = greenup_pred)
   }
 
-  if (class(s1_senes_mod_list[[x]]) == "lm") {
-  senes_pred <- predict(s1_senes_mod_list[[x]])
-  senes_pred_df <- data.frame(doy = s1_senes_mod_list[[x]]$model$doy, 
+  if (class(s1_senes_mod_list[[x]][[1]]) == "lm") {
+  senes_pred <- predict(s1_senes_mod_list[[x]][[1]])
+  senes_pred_df <- data.frame(doy = s1_senes_mod_list[[x]][[1]]$model$doy, 
     pred = senes_pred)
   }
 
@@ -226,40 +248,41 @@ growth_stat_plot <- function(x, raw = FALSE) {
 
   if (raw) {
     evi_raw <- evi_clean %>% 
-      filter(plot_cluster == names(loess_list[x]))
+      filter(plot_cluster == names(gam_list[x]))
 
     p <- p + geom_path(data = evi_raw, aes(x = doy, y = evi, group = season),
       alpha = 0.5) 
   }
 
   p <- p + 
-    geom_path(data = loess_list[[x]], aes(x = doy, y = pred), size = 1.5) + 
-    geom_path(data = loess_fil[[x]], aes(x = doy, y = pred), 
+    geom_path(data = gam_list[[x]][[2]], aes(x = doy, y = pred), size = 1.5) + 
+    geom_path(data = gam_fil[[x]], aes(x = doy, y = pred), 
       colour = pal[1], size = 1.5)
 
-  if (class(s1_greenup_mod_list[[x]]) == "lm") {
+  if (class(s1_greenup_mod_list[[x]][[1]]) == "lm") {
     p <- p + geom_path(data = greenup_pred_df, aes(x = doy, y = pred),
       size = 2, linetype = "dotdash", colour = pal[2]) 
   }
-  if (class(s1_senes_mod_list[[x]]) == "lm") {
+  if (class(s1_senes_mod_list[[x]][[1]]) == "lm") {
     p <- p + geom_path(data = senes_pred_df, aes(x = doy, y = pred), 
       size = 2, linetype = "dotdash", colour = pal[2]) 
   }
   p + 
-    geom_vline(xintercept = pred_data[min_list[[x]]], colour = pal[3] ) + 
-    geom_vline(xintercept = loess_list[[x]][which(loess_list[[x]][["pred"]] == phen_df[x, "max_vi"]), "doy"], colour = pal[4]) + 
+    geom_vline(xintercept = gam_list[[x]][[2]][which(gam_list[[x]][[2]][["pred"]] == phen_df[x, "max_vi"]), "doy"], colour = pal[4]) + 
     theme_panel() + 
-    labs(x = "Days from 1st Jan.", y = "EVI")
+    labs(x = "Days from 1st Jan.", y = "EVI") + 
+    ggtitle(names(gam_list[x]))
 }
 
-ts_stat_plot_list <- lapply(sample(seq(length(loess_list)), 50), growth_stat_plot) 
+#sam <- sample(seq(length(gam_list)), 50)
+ts_stat_plot_list <- lapply(sam, growth_stat_plot) 
 
 pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)
 grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
 dev.off()
 
 # Example plot on its own
-ts_example_plot <- growth_stat_plot(100, raw = TRUE)
+ts_example_plot <- growth_stat_plot(598, raw = TRUE)
 
 pdf(file = "img/ts_example.pdf", width = 8, height = 6)
 ts_example_plot + 
