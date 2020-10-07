@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
 
+# Each script saves a .rds file which can then be loaded by the next script
+
 Rscript data_prep.R
 Rscript modis_get.R
 Rscript modis_extract.R

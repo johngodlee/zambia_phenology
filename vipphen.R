@@ -64,7 +64,6 @@ names(plots_phen_extract) <- paste0("vipphen_", c("s1_start", "s1_end", "s1_leng
   "s1_green_rate", "s1_senes_rate", "cum_vi", "avg_vi", "bg_vi", "n_seasons"))
 
 plots_phen <- plots %>% 
-  bind_cols(., plots_phen_extract) %>%
   filter(vipphen_n_seasons < 2) %>%
   dplyr::select(-vipphen_n_seasons) %>%
   filter(!is.na(vipphen_s1_length))
