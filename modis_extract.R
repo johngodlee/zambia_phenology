@@ -10,8 +10,8 @@ library(ggplot2)
 library(gridExtra)
 library(zoo)
 library(lubridate)
-library(mgcv)
-library(gratia)
+library(mgcv)  # gam()
+library(gratia)  # derivatives()
 
 source("functions.R")
 
@@ -37,7 +37,7 @@ evi_ts_df <- do.call(rbind, csv_list)
 evi_ts_df$date <- unlist(lapply(evi_ts_df$date, as.Date, 
     tryFormats = c("%Y-%m-%d", "%d/%m/%Y")))
 
-# Decompose annual time series - at September, with 2 month overlap on both ends
+# Define function to decompose time series with overlap
 seasonGet <- function(x, min_date, max_date, date = "date") {
   # Format date as date
   x[[date]] <- as.Date(x[[date]])
@@ -60,6 +60,7 @@ seasonGet <- function(x, min_date, max_date, date = "date") {
   return(out)
 }
 
+# Decompose annual time series - at September, with 2 month overlap on both ends
 evi_ts_list <- split(evi_ts_df, evi_ts_df$plot_cluster)
 
 evi_seas_list <- lapply(evi_ts_list, function(x) {
@@ -72,16 +73,22 @@ evi_seas_list <- lapply(evi_ts_list, function(x) {
   )
 })
 
-evi_clean <- do.call(rbind, 
-  do.call(rbind, evi_seas_list)
-  ) %>%
+evi_clean <- do.call(rbind, do.call(rbind, evi_seas_list)) %>%
   filter(!is.na(evi))
 
 saveRDS(evi_clean, "dat/evi_ts.rds")
 
-write(
-  commandOutput(loess_span, "loessSpan"),
-  file="out/vars.tex", append=TRUE)
+# Create time series plots
+pdf(file = "img/ts.pdf", width = 12, height = 8)
+ggplot() +
+  geom_path(data = evi_ts, aes(x = date, y = evi, group = plot_cluster),
+    alpha = 0.2) +
+  scale_x_date(date_labels = "%Y-%b", date_breaks = "3 months") +
+  theme_panel() +
+  theme(legend.position = "none", 
+    axis.text = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
+    panel.grid.minor = element_blank())
+dev.off()
 
 # Compute yearly curves for each plot
 evi_split <- split(evi_clean, evi_clean$plot_cluster)
@@ -97,11 +104,11 @@ gam_list <- lapply(evi_split, function(x) {
 # Calculate key statistics: 
 phen_df <- data.frame(plot_cluster = names(gam_list))
 
-# Max and min
+# Max and min EVI
 phen_df$max_vi <- unlist(lapply(gam_list, function(x) {max(x[[2]][1:355, "pred"])}))
 phen_df$min_vi <- unlist(lapply(gam_list, function(x) {min(x[[2]][1:355, "pred"])}))
 
-
+# Define change in slope parameter
 slc <- 5
 
 # Start and end of growing season
@@ -127,7 +134,6 @@ phen_df$s1_end <- unlist(lapply(gam_list, function(x) {
 # Season length
 ##' Days between start and end
 phen_df$s1_length <- phen_df$s1_end - phen_df$s1_start
-
 
 # Subset GAM predicted values to within start and end of season
 gam_fil <- lapply(seq(length(gam_list)), function(x) {
@@ -274,7 +280,7 @@ growth_stat_plot <- function(x, raw = FALSE) {
     ggtitle(names(gam_list[x]))
 }
 
-#sam <- sample(seq(length(gam_list)), 50)
+sam <- sample(seq(length(gam_list)), 50)
 ts_stat_plot_list <- lapply(sam, growth_stat_plot) 
 
 pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)

@@ -6,6 +6,7 @@
 library(dplyr)
 library(tidyr)
 library(sf)
+library(tibble)
 
 source("functions.R")
 
@@ -30,7 +31,7 @@ plots_fil_sf <- plots %>%
     prinv == "Siampale A.") %>% 
   dplyr::select(
     plot_id, plot_cluster, longitude_of_centre, latitude_of_centre, 
-    richness, shannon, simpson, evenness, n_stems_gt5_ha, ba_ha, agb_ha,
+    richness, shannon, simpson, evenness, n_stems_gt10_ha, ba_ha, agb_ha,
     mat = bio1, diurnal_temp_range = bio2, map = bio12,
     clay = CLYPPT, sand = SNDPPT, cec = CECSOL,
     last_census_date) %>%
@@ -44,7 +45,7 @@ plots_fil_sf <- plots %>%
     clust4 = first(na.omit(clust4)),
     longitude_of_centre = mean(longitude_of_centre, na.rm = TRUE),
     latitude_of_centre = mean(latitude_of_centre, na.rm = TRUE),
-    n_stems_gt5_ha = mean(n_stems_gt5_ha, na.rm = TRUE),
+    n_stems_gt10_ha = mean(n_stems_gt10_ha, na.rm = TRUE),
     ba_ha = mean(ba_ha, na.rm = TRUE),
     agb_ha = mean(agb_ha, na.rm = TRUE),
     mat = mean(mat, na.rm = TRUE),
@@ -58,9 +59,7 @@ plots_fil_sf <- plots %>%
   `st_crs<-`(4326) %>%
   mutate(plot_id_vec = strsplit(as.character(plot_id), 
   split = ",")) %>%
-  mutate(plot_id_length = sapply(.$plot_id_vec, length)) #%>%
- # filter(plot_id_length == 4) %>%
- # dplyr::select(-plot_id_length)
+  mutate(plot_id_length = sapply(.$plot_id_vec, length))
 
 census <- unique(plots_fil_sf$last_census_date)
 
@@ -77,7 +76,6 @@ write(
     ),
   file="out/vars.tex", append=TRUE)
 
-
 plots_fil_sf <- plots_fil_sf %>% 
   dplyr::select(-last_census_date)
 
@@ -85,8 +83,6 @@ plots_fil_sf <- plots_fil_sf %>%
 plot_id_lookup <- plots %>% 
   filter(plot_id %in% unlist(plots_fil_sf$plot_id_vec)) %>%
   dplyr::select(plot_cluster, plot_id)
-
-saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 
 # Filter stems by plots
 stems_fil <- stems %>%
@@ -115,10 +111,8 @@ tree_ab_mat_plot <- stems_fil %>%
   ungroup() %>%
   mutate_at(vars(-plot_id), as.double) %>%
   as.data.frame() %>%
-  dplyr::select(-`Indet indet`)
-
-rownames(tree_ab_mat_plot) <- tree_ab_mat_plot[["plot_id"]]
-tree_ab_mat_plot <- tree_ab_mat_plot[,-1, drop=FALSE]  # Remove plot_id 
+  dplyr::select(-`Indet indet`) %>%
+  column_to_rownames("plot_id") 
 
 # Create tree species abundance matrix
 tree_ab_mat_clust <- stems_fil %>% 
@@ -132,18 +126,22 @@ tree_ab_mat_clust <- stems_fil %>%
   ungroup() %>%
   mutate_at(vars(-plot_cluster), as.double) %>%
   as.data.frame() %>%
-  dplyr::select(-`Indet indet`)
-
-# Clean and filter tree species abundance matrix
-rownames(tree_ab_mat_clust) <- tree_ab_mat_clust[["plot_cluster"]]
-tree_ab_mat_clust <- tree_ab_mat_clust[,-1, drop=FALSE]  # Remove plot cluster column
-tree_ab_mat_clust <- filter_all(tree_ab_mat_clust, any_vars(. != 0))  # Filter empty plots
-tree_ab_mat_clust <- tree_ab_mat_clust[stems_ha < rowSums(tree_ab_mat_clust) / 0.4,]  # Remove plots with fewer than x stems ha
+  dplyr::select(-`Indet indet`) %>%
+  column_to_rownames("plot_cluster") %>%
+  filter_all(any_vars(. != 0)) %>%
+  filter(rowSums(.) / 
+    (pull(st_drop_geometry(
+      plots_fil_sf[plots_fil_sf$plot_cluster %in% row.names(tree_ab_mat_clust), "plot_id_length"]
+      )) * 0.1) > stems_ha)  # Remove plots with fewer than x stems ha
 
 # Remove plots not in tree abundance matrix
 plots_clean <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat_clust))
 
+tree_ab_mat_plot_clean <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% 
+  unlist(plots_clean$plot_id_vec),]
+
 saveRDS(plots_clean, "dat/plots.rds")
 saveRDS(tree_ab_mat_clust, "dat/tree_ab_mat.rds")
 saveRDS(tree_ab_mat_plot, "dat/tree_ab_mat_plot.rds")
+saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 

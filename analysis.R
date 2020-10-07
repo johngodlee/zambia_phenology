@@ -30,28 +30,23 @@ af <- st_read("/Volumes/john/africa_countries/africa.shp")
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
 
-evi_ts <- readRDS("dat/evi_ts.rds")
-
-nmds <- readRDS("dat/nmds.rds")
-species_scores <- readRDS("dat/species_scores.rds")
-
 # Define variable name translation lookup
 pred_lookup <- c("Richness", "Evenness", "Stem density",
     "Vegetation type", "MAP", "Diurnal dT")
-names(pred_lookup) <- c("richness", "evenness", "n_stems_gt5_ha", 
-  "clust4", "map", "diurnal_temp_range")
+names(pred_lookup) <- c("richness", "evenness", "n_stems_gt10_ha", 
+  "cluster", "map", "diurnal_temp_range")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
   "Greening rate", "Senescence rate", "Season start")
 names(resp_lookup) <- c("cum_vi", "s1_length", 
   "s1_green_rate", "s1_senes_rate", "s1_start")
 
-clust_lookup <- c("Sparse", "Core")
-names(clust_lookup) <- c("1", "2")
+clust_lookup <- c("1", "2", "3", "4")
+names(clust_lookup) <- c("1", "2", "3", "4")
 
 # Remove old variables 
 dat_clean <- dat %>%
-  mutate(clust4 = factor(clust4, labels = clust_lookup))
+  mutate(cluster = factor(cluster, labels = clust_lookup))
 
 # How many sites are there?
 write(
@@ -63,39 +58,6 @@ write(
 #  file.remove(list.files("dat/shp", "loc.*", full.names = TRUE))
 #}
 #st_write(dat, "dat/shp/loc.shp")
-
-# Create time series plots
-pdf(file = "img/ts.pdf", width = 12, height = 8)
-ggplot() +
-  geom_path(data = evi_ts, aes(x = date, y = evi, group = plot_cluster),
-    alpha = 0.2) +
-  scale_x_date(date_labels = "%Y-%b", date_breaks = "3 months") +
-  theme_panel() +
-  theme(legend.position = "none", 
-    axis.text = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
-    panel.grid.minor = element_blank())
-dev.off()
-
-pdf(file = "img/ts_smooth.pdf", width = 12, height = 8)
-evi_ts %>%
-  filter(plot_cluster %in% 
-    unique(.$plot_cluster)[sample(seq(length(unique(.$plot_cluster))), 50)]) %>%
-  ggplot(aes(x = doy, y = evi)) + 
-    geom_path(aes(group = season), colour = pal[1]) + 
-    stat_smooth(method = "loess", span = loess_span, colour = "black") + 
-    facet_wrap(~plot_cluster) +
-    theme_panel() + 
-    theme(legend.position = "none",
-      strip.text = element_blank(),
-      axis.text.x = element_text(size=12, angle=90, vjust=0.5)) + 
-    labs(x = "Days from 1st Jan.", y = "EVI")
-dev.off()
-
-pdf(file = "img/ts_season_year.pdf", width = 10, height = 8)
-ggplot() + 
-  geom_path(data = filter(evi_ts, plot_cluster == "ZIS_101"), 
-    aes(x = date, y = evi, colour = season, linetype = year))
-dev.off()
 
 # Compare VIPPHEN and 250 m
 old_gather <- dat_clean %>%
@@ -126,7 +88,7 @@ dev.off()
 # histogram of raw data
 pdf(file =  "img/hist_raw.pdf", width = 12, height = 10)
 dat_clean %>% 
-  dplyr::select(names(pred_lookup), -clust4) %>%
+  dplyr::select(names(pred_lookup), -cluster) %>%
   st_drop_geometry() %>%
   as.data.frame() %>%
   gather(variable, value) %>%
@@ -145,31 +107,31 @@ dev.off()
 bivar_list <- c(
   "cum_vi ~ richness",
   "cum_vi ~ evenness",
-  "cum_vi ~ n_stems_gt5_ha",
+  "cum_vi ~ n_stems_gt10_ha",
   "cum_vi ~ map",
   "cum_vi ~ diurnal_temp_range",
 
   "s1_length ~ richness",
   "s1_length ~ evenness",
-  "s1_length ~ n_stems_gt5_ha",
+  "s1_length ~ n_stems_gt10_ha",
   "s1_length ~ map",
   "s1_length ~ diurnal_temp_range",
 
   "s1_green_rate ~ richness",
   "s1_green_rate ~ evenness",
-  "s1_green_rate ~ n_stems_gt5_ha",
+  "s1_green_rate ~ n_stems_gt10_ha",
   "s1_green_rate ~ map",
   "s1_green_rate ~ diurnal_temp_range",
 
   "s1_senes_rate ~ richness",
   "s1_senes_rate ~ evenness",
-  "s1_senes_rate ~ n_stems_gt5_ha",
+  "s1_senes_rate ~ n_stems_gt10_ha",
   "s1_senes_rate ~ map",
   "s1_senes_rate ~ diurnal_temp_range",
 
   "s1_start ~ richness",
   "s1_start ~ evenness",
-  "s1_start ~ n_stems_gt5_ha",
+  "s1_start ~ n_stems_gt10_ha",
   "s1_start ~ map",
   "s1_start ~ diurnal_temp_range"
 )
@@ -179,7 +141,7 @@ bivar_df <- as.data.frame(do.call(rbind, lapply(bivar_list, function(x) {
   y_var <- sym(unlist(strsplit(x, split = " ~ "))[1])
 
   dat_clean %>% 
-    dplyr::select(!!x_var, !!y_var, clust4) %>%
+    dplyr::select(!!x_var, !!y_var, cluster) %>%
     st_drop_geometry() %>%
     rename(pred = !!x_var, resp = !!y_var) %>%
     mutate(x = as.character(x_var), 
@@ -191,7 +153,7 @@ bivar_df$y <- factor(bivar_df$y, levels = names(resp_lookup))
 
 pdf(file = "img/bivar.pdf", width = 15, height = 10)
 ggplot() + 
-  geom_point(data = bivar_df, aes(x = pred, y = resp, fill = clust4), 
+  geom_point(data = bivar_df, aes(x = pred, y = resp, fill = cluster), 
 	colour = "black", shape = 21) +
   geom_line(data = bivar_df, aes(x = pred, y = resp),
 	stat = "smooth", method = "lm", colour = pal[1], se = FALSE, size = 1.5) + 
@@ -209,11 +171,11 @@ dat_std <- dat_clean %>%
   mutate_at(.vars = c(
       "richness",
       "evenness", 
-      "n_stems_gt5_ha",
+      "n_stems_gt10_ha",
       "map",
       "diurnal_temp_range"),
     .funs = list(std = ~(scale(.) %>% as.vector))) %>%
-  dplyr::select(ends_with("_std"), clust4, names(resp_lookup), geometry) %>%
+  dplyr::select(ends_with("_std"), cluster, names(resp_lookup), geometry) %>%
   rename_at(.vars = vars(ends_with("_std")), 
     .funs = list(~gsub("_std", "", .))) %>%
   st_transform(., UTMProj4("35S")) %>%
@@ -223,7 +185,7 @@ dat_std <- dat_clean %>%
 
 # Check for collinearity
 pdf(file = "img/corrplot.pdf", height = 8, width = 8)
-corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "clust4")]]) + 
+corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "cluster")]]) + 
   scale_x_discrete(labels = pred_lookup) + 
   scale_y_discrete(labels = pred_lookup)
 dev.off()
@@ -243,8 +205,8 @@ phen_mod <- function(var, pre) {
   dev.off()
 
   # Define maximal model
-  max_mod <- lm(get(var) ~ richness + evenness + n_stems_gt5_ha + 
-    clust4 + map + diurnal_temp_range, 
+  max_mod <- lm(get(var) ~ richness + evenness + n_stems_gt10_ha + 
+    cluster + map + diurnal_temp_range, 
     data = dat_std)
 
   # Summary
@@ -264,7 +226,7 @@ phen_mod <- function(var, pre) {
 
   # Reduced model comparison 
   max_mod_ml <- lm(get(var) ~ 
-    richness + evenness + n_stems_gt5_ha + clust4 + 
+    richness + evenness + n_stems_gt10_ha + cluster + 
     map + diurnal_temp_range,
   data = dat_std)
 
@@ -290,32 +252,32 @@ phen_mod("s1_start", "s")
 # spaMM models with spatial autocorrelation ----
 
 # Fit models
-max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt5_ha + 
-    clust4 + map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
+max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt10_ha + 
+  map + diurnal_temp_range + 
+  Matern(1 | x + y) + (1|cluster) , data = dat_std, family = "gaussian")
 null_mod_spamm_c <- fitme(cum_vi ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
-max_mod_spamm_l <- fitme(s1_length ~ richness + evenness + n_stems_gt5_ha + 
-    clust4 + map + diurnal_temp_range + 
+max_mod_spamm_l <- fitme(s1_length ~ richness + evenness + n_stems_gt10_ha + 
+    cluster + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_l <- fitme(s1_length ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
-max_mod_spamm_r <- fitme(s1_green_rate ~ richness + evenness + n_stems_gt5_ha + 
-    clust4 + map + diurnal_temp_range + 
+max_mod_spamm_r <- fitme(s1_green_rate ~ richness + evenness + n_stems_gt10_ha + 
+    cluster + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_r <- fitme(s1_green_rate ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
-max_mod_spamm_d <- fitme(s1_senes_rate ~ richness + evenness + n_stems_gt5_ha + 
-    clust4 + map + diurnal_temp_range + 
+max_mod_spamm_d <- fitme(s1_senes_rate ~ richness + evenness + n_stems_gt10_ha + 
+    cluster + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_d <- fitme(s1_senes_rate ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 
-max_mod_spamm_s <- fitme(s1_start ~ richness + evenness + n_stems_gt5_ha + 
-    clust4 + map + diurnal_temp_range + 
+max_mod_spamm_s <- fitme(s1_start ~ richness + evenness + n_stems_gt10_ha + 
+    cluster + map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_s <- fitme(s1_start ~ map + diurnal_temp_range + 
     Matern(1 | x + y), data = dat_std, family = "gaussian")
@@ -336,7 +298,7 @@ phen_spamm_mod <- function(max_mod, null_mod, pre) {
   resp <- as.character(max_mod$predictor[[2]])
 
   mod_hier <- hier.part(dat_std[[resp]], dat_std %>% 
-    dplyr::select(richness, evenness, n_stems_gt5_ha, clust4,
+    dplyr::select(richness, evenness, n_stems_gt10_ha, cluster,
       map, diurnal_temp_range), barplot = FALSE)
 
   # Estimate degree of spatial autocorrelation
@@ -418,7 +380,7 @@ spamm_eff_df <- do.call(rbind, lapply(spamm_list, function(x) {
 
 spamm_eff_df$resp <- factor(spamm_eff_df$resp, levels = names(resp_lookup))
 
-spamm_eff_df$var <- gsub("clust42", "clust4", spamm_eff_df$var)
+spamm_eff_df$var <- gsub("cluster2", "cluster", spamm_eff_df$var)
 spamm_eff_df$var <- factor(spamm_eff_df$var, levels = rev(names(pred_lookup)),
   labels = rev(pred_lookup))
 
@@ -455,57 +417,6 @@ writeLines(print(mod_hier_tab, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-
-# Plot NMDS
-nmds_plot <- function(axes = c(1,2), clust = "clust4") {
-  # Run ordiellipse
-  ord <- ordiplot(nmds, choices = axes, display = 'sites', type = 'n')
-  ord$sites <- ord$sites[row.names(ord$sites) %in% dat_clean$plot_cluster,]
-  ell <- ordiellipse(ord, dat_clean[[clust]], display = "sites", draw = "none",
-    kind = "sd", conf = .95, label = T)
-
-  # Extract ellipses from ordiellipse
-  df_ell <- data.frame()
-  for(g in unique(dat_clean[[clust]])) {
-    df_ell <- rbind(df_ell, 
-      cbind(as.data.frame(with(dat_clean[dat_clean[[clust]] == g,],
-            covEllipse(ell[[g]]$cov, ell[[g]]$center))), group = g))
-  }
-
-  group_short <- gsub("\\s.*", "", clust_lookup)
-  
-  # Create plots
-  x <- sym(paste0("NMDS", axes[1]))
-  y <- sym(paste0("NMDS", axes[2]))
-  colour = sym(clust)
-
-  annot_df <- df_ell %>%
-    group_by(group) %>%
-    summarise_all(mean)
-
-  p <- ggplot() + 
-    geom_point(data = dat_clean, 
-      aes(x = !!x, y = !!y, fill = !!colour), colour = "black", shape = 21) +
-    geom_path(data = df_ell, 
-      aes(x = !!x, y = !!y, colour = group), size = 1) + 
-    geom_label_repel(data = annot_df, 
-      aes(x = !!x, y = !!y, label = group, colour = group)) +
-    scale_colour_manual(values = clust_pal) + 
-    scale_fill_manual(values = clust_pal) + 
-    theme_panel() + 
-    theme(legend.position = "none")
-
-  return(p)
-}
-
-p1 <- nmds_plot(c(1,2), "clust4")
-p2 <- nmds_plot(c(1,3), "clust4")
-p3 <- nmds_plot(c(2,3), "clust4")
-
-pdf(file = "img/nmds.pdf", width = 12, height = 6)
-grid.arrange(p1, p2, ncol = 2)
-dev.off()
-
 # Plot location map
 s1_length_tile <- as.data.frame(
   as(phen_stack$X3, "SpatialPixelsDataFrame")  # s1_length
@@ -518,7 +429,7 @@ ggplot() +
     limits = c(100, 300)) + 
   new_scale_fill() +
   geom_sf(data = zambia, colour = "black", fill = NA) +
-  geom_sf(data = dat_clean, aes(fill = clust4), 
+  geom_sf(data = dat_clean, aes(fill = cluster), 
     colour = "black", shape = 24, size = 3) +
   theme_panel() + 
   scale_fill_manual(name = "", values = clust_pal) + 
