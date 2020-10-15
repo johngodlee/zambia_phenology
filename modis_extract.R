@@ -19,7 +19,7 @@ source("functions.R")
 dat <- readRDS("dat/plots.rds")
 
 # Read .csv files per granule 
-csv_files <- list.files("dat", "*_extract.csv", full.names = TRUE)
+csv_files <- list.files("dat", "evi_h.*_extract.csv", full.names = TRUE)
 csv_list <- lapply(csv_files, read.csv)
 
 # Check that no plots have been included in both granules 
@@ -36,29 +36,6 @@ any(
 evi_ts_df <- do.call(rbind, csv_list)
 evi_ts_df$date <- unlist(lapply(evi_ts_df$date, as.Date, 
     tryFormats = c("%Y-%m-%d", "%d/%m/%Y")))
-
-# Define function to decompose time series with overlap
-seasonGet <- function(x, min_date, max_date, date = "date") {
-  # Format date as date
-  x[[date]] <- as.Date(x[[date]])
-
-  # Subset data between max and min dates
-  out <- x[x[[date]] > as.Date(min_date) & x[[date]] < as.Date(max_date),]
-
-  # Get the "season" of the data, i.e. the year the measurements start
-  out$season <- min(format(out[[date]], "%Y"))
-
-  # Get the days from the min date
-  out$days <- as.numeric(out[[date]] - as.Date(min_date))
-
-  # Get year
-  out$year <- format(out[[date]], "%Y")
-
-  # Recenter days on start of year in middle of growing season
-  out$doy <- as.numeric(out$date - as.Date(paste0(format(as.Date(max_date), "%Y"), "-01-01")))
-    
-  return(out)
-}
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 evi_ts_list <- split(evi_ts_df, evi_ts_df$plot_cluster)
@@ -79,9 +56,9 @@ evi_clean <- do.call(rbind, do.call(rbind, evi_seas_list)) %>%
 saveRDS(evi_clean, "dat/evi_ts.rds")
 
 # Create time series plots
-pdf(file = "img/ts.pdf", width = 12, height = 8)
+pdf(file = "img/evi_ts.pdf", width = 12, height = 8)
 ggplot() +
-  geom_path(data = evi_ts, aes(x = date, y = evi, group = plot_cluster),
+  geom_path(data = evi_clean, aes(x = date, y = evi, group = plot_cluster),
     alpha = 0.2) +
   scale_x_date(date_labels = "%Y-%b", date_breaks = "3 months") +
   theme_panel() +
@@ -109,7 +86,7 @@ phen_df$max_vi <- unlist(lapply(gam_list, function(x) {max(x[[2]][1:355, "pred"]
 phen_df$min_vi <- unlist(lapply(gam_list, function(x) {min(x[[2]][1:355, "pred"])}))
 
 # Define change in slope parameter
-slc <- 5
+slc <- 0.05
 
 # Start and end of growing season
 ##' Using first derivatives of GAM
@@ -118,17 +95,21 @@ slc <- 5
 phen_df$s1_start <- unlist(lapply(gam_list, function(x) {
   mod <- x[[1]] 
 
-  der <- derivatives(mod)
+  der <- derivatives(mod, type = "forward")
 
-  round(pull(der[which(der$derivative >= slc), "data"])[1])
+  der_fil <- der[der$data > -175,]
+
+  round(pull(der_fil[which(der_fil$derivative >= slc), "data"])[1])
 }))
 
 phen_df$s1_end <- unlist(lapply(gam_list, function(x) {
   mod <- x[[1]] 
 
-  der <- derivatives(mod)
+  der <- derivatives(mod, type = "backward")
 
-  round(last(pull(der[which(der$derivative <= -slc), "data"])))
+  der_fil <- der[der$data < 250,]
+
+  round(last(pull(der_fil[which(der_fil$derivative <= -slc), "data"])))
 }))
 
 # Season length
@@ -227,9 +208,8 @@ phen_df$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
   sum(diff(gam_fil[[x]][["doy"]])*rollmean(gam_min,2))
 }))
 
-# Join with original plot data
 phen_all <- dat %>%
-  left_join(., phen_df, by = "plot_cluster") %>% 
+  left_join(., phen_df, by = "plot_cluster") %>%
   filter(!is.na(s1_start))
 
 # Write data 

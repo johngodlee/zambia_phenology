@@ -15,6 +15,8 @@ library(ade4)
 library(cluster)
 library(labdsv)
 library(shades)
+library(tibble)
+library(xtable)
 
 source("functions.R")
 
@@ -22,33 +24,51 @@ source("functions.R")
 tree_ab_mat <- readRDS("dat/tree_ab_mat.rds")
 tree_ab_mat_plot <- readRDS("dat/tree_ab_mat_plot.rds")
 
-plots <- readRDS("dat/plots_phen.rds") 
+plots <- readRDS("dat/plots_trmm.rds") 
 
 plot_id_lookup <- readRDS("dat/plot_id_lookup.rds")
 
 # Exclude clusters with mental species composition
-# Exclude species with only one occurrence
+# Exclude species which are clearly non-native
 ab_mat_clean <- tree_ab_mat %>%
-  filter(!row.names(.) %in% c("ZIS_2385", "ZIS_3765"),
-    row.names(.) %in% unique(plots$plot_cluster)) %>%
-  dplyr::select(which(!colSums(., na.rm = TRUE) %in% c(0,1)))
+  filter(row.names(.) %in% plots$plot_cluster,
+    !row.names(.) %in% c("ZIS_2958", "ZIS_2385", "ZIS_3765")) %>%
+  dplyr::select(-starts_with("Pinus"), -starts_with("Eucalyptus"))
+
+# Calculate common  diversity statistics
+div_df <- data.frame(plot_cluster = row.names(ab_mat_clean), 
+  richness = unname(rowSums(ab_mat_clean != 0)),
+  shannon = diversity(ab_mat_clean),
+  simpson = diversity(ab_mat_clean, "simpson"),
+  evenness = diversity(ab_mat_clean, "invsimpson") / rowSums(ab_mat_clean > 0))
+
+
+# Filter abundance matrix
+# Remove plots with fewer than 5 species with more than 1 individual
+ab_mat_fil <- ab_mat_clean[
+  unname(apply(ab_mat_clean, 1, function(x) { sum(x > 1, na.rm = TRUE) })) >= 5,]  
+ab_mat_fil <- ab_mat_fil[rowSums(ab_mat_fil) != 0,]  # Remove plots with no individuals
+ab_mat_fil <- ab_mat_fil[,colSums(ab_mat_fil) != 0]  # Remove species with no individuals
+
+plots_fil <- plots %>%
+  filter(plot_cluster %in% row.names(ab_mat_fil))
 
 # Conduct NSCA (Non-symmetric Correspondence Analysis) 
 ##' 4 axes
-nsca <- dudi.nsc(df = ab_mat_clean, scannf = FALSE, nf = 4)
+nsca <- dudi.nsc(df = ab_mat_fil, scannf = FALSE, nf = 4)
+
 ##' p = species
 ##' n = sites
 
 # Run clustering around medoids
 ##' 4 clusters
-pam_clust <- pam(nsca$l1, k = 4, metric = "manhattan", diss = FALSE)
+pam_clust <- pam(nsca$li, k = 4, metric = "manhattan", diss = FALSE)
 
 # Extract data from clustering and NSCA
 nsc_df <- data.frame(plot_cluster = names(pam_clust$clustering), 
   cluster = unname(pam_clust$clustering)) %>% 
-  left_join(., rownames_to_column(nsca$li), by = c("plot_cluster" = "rowname")) %>%
-  mutate(cluster = as.character(cluster)) %>%
-  rename_with(~gsub("Axis", "_", paste0("nsc", .)), starts_with("Axis"))
+  left_join(., rownames_to_column(nsca$l1), by = c("plot_cluster" = "rowname")) %>%
+  mutate(cluster = as.character(cluster))
 
 # Plot of clusters
 nscaPlot <- function(x,y, dat = nsc_df) {
@@ -59,23 +79,32 @@ nscaPlot <- function(x,y, dat = nsc_df) {
     geom_point(shape = 21, size = 2, aes(fill = cluster)) + 
     geom_bag(prop = 0.95, alpha = 0.2, aes(colour = cluster, fill = cluster)) + 
     scale_fill_manual(name = "Cluster", values = clust_pal) + 
-    scale_x_continuous(breaks = seq(-10,10, by = 2)) +
-    scale_y_continuous(breaks = seq(-10,10, by = 2)) +
     theme_panel() + 
-    labs(x = gsub("nsc_", "NSC ", x),
-      y = gsub("nsc_", "NSC ", y))
+    labs(x = gsub("RS", "NSC ", x),
+      y = gsub("RS", "NSC ", y))
+
+  return(p)
 }
 
 pdf(file = "img/nsca.pdf", width = 12, height = 6)
-nscaPlot(nsc_1, nsc_2) + 
-  nscaPlot(nsc_3, nsc_4) + 
+nscaPlot(RS1, RS2) +
+  nscaPlot(RS3, RS4) + 
   plot_layout(guides = "collect", widths = 1) & 
   scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5), 
     limits = unique(nsc_df$cluster))
 dev.off()
 
+# Add values to data
+div <- plots_fil %>%
+  left_join(., div_df, by = "plot_cluster")  %>%
+  left_join(., nsc_df, by = "plot_cluster") 
+
+# Write file
+saveRDS(div, "dat/plots_div.rds") 
+
+
 # Indicator species per cluster
-clust_indval <- indval(ab_mat_clean, clustering = nsc_df$cluster)
+clust_indval <- indval(ab_mat_fil, clustering = nsc_df$cluster)
 
 # Summarise indicator analysis
 summary(clust_indval, p = 0.05, type = "short", digits = 2, show = p)
@@ -110,26 +139,11 @@ writeLines(print(indval_xtable, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-# Calculate common  diversity statistics
-div_df <- data.frame(plot_cluster = row.names(ab_mat_clean), 
-  richness = unname(rowSums(ab_mat_clean != 0)),
-  shannon = diversity(ab_mat_clean),
-  simpson = diversity(ab_mat_clean, "simpson"),
-  evenness = diversity(ab_mat_clean, "invsimpson") / rowSums(ab_mat_clean > 0))
-
-# Add values to data
-plots_div <- plots %>%
-  left_join(., nsc_df, by = "plot_cluster") %>%
-  left_join(., div_df, by = "plot_cluster") %>% 
-  filter(!is.na(richness))
-
-saveRDS(plots_div, "dat/plots_div.rds") 
-
 # Test Beta diversity between plots in a cluster - UNFINISHED
 
 # Filter to plots we're using
 tree_ab_mat_plot_fil <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% 
-  unlist(strsplit(plots_div$plot_id, ",")) & rowSums(tree_ab_mat_plot) != 0,]
+  unlist(strsplit(div$plot_id, ",")) & rowSums(tree_ab_mat_plot) != 0,]
 
 # Split each plot cluster into own abundance matrix
 tree_ab_mat_split <- left_join(rownames_to_column(tree_ab_mat_plot_fil), plot_id_lookup, 

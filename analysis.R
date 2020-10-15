@@ -8,6 +8,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(ggrepel)
+library(shades)
 library(ggnewscale)
 library(viridis)
 library(gridExtra)
@@ -22,7 +23,9 @@ library(vegan)
 source("functions.R")
 
 # Import data 
-dat <- readRDS("dat/plots_vipphen.rds")
+dat <- readRDS("dat/plots_div.rds")
+
+dat <- st_as_sf(dat)
 
 phen_stack <- readRDS("dat/vipphen_stack.rds")
 
@@ -31,75 +34,48 @@ zambia <- af %>%
   filter(sov_a3 == "ZMB")
 
 # Define variable name translation lookup
-pred_lookup <- c("Richness", "Evenness", "Stem density",
-    "Vegetation type", "MAP", "Diurnal dT")
-names(pred_lookup) <- c("richness", "evenness", "n_stems_gt10_ha", 
-  "cluster", "map", "diurnal_temp_range")
+pred_lookup <- c("Richness", "Evenness", "Tree density", "MAP",
+    "Vegetation type", "Diurnal dT")
+names(pred_lookup) <- c("richness", "evenness", "n_stems_gt10_ha", "map",
+  "cluster", "diurnal_temp_range")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
-  "Greening rate", "Senescence rate", "Season start")
+  "Greening rate", "Senescence rate", "Season start", "Season end", 
+  "Start lag", "End lag")
 names(resp_lookup) <- c("cum_vi", "s1_length", 
-  "s1_green_rate", "s1_senes_rate", "s1_start")
+  "s1_green_rate", "s1_senes_rate", "s1_start", "s1_end", 
+  "start_lag", "end_lag")
 
 clust_lookup <- c("1", "2", "3", "4")
 names(clust_lookup) <- c("1", "2", "3", "4")
 
-# Remove old variables 
+# Calculate some statistics
 dat_clean <- dat %>%
-  mutate(cluster = factor(cluster, labels = clust_lookup))
+  mutate(cluster = factor(cluster, labels = clust_lookup),
+    start_lag = s1_start - trmm_start,
+    end_lag = s1_end - trmm_end)
 
 # How many sites are there?
 write(
   commandOutput(nrow(dat_clean), "nSites"),
   file="out/vars.tex", append=TRUE)
 
-# Write as shapefile
-#if (file.exists("dat/shp/loc.shp")) {
-#  file.remove(list.files("dat/shp", "loc.*", full.names = TRUE))
-#}
-#st_write(dat, "dat/shp/loc.shp")
-
-# Compare VIPPHEN and 250 m
-old_gather <- dat_clean %>%
-  dplyr::select(plot_cluster, contains("vipphen"), -vipphen_bg_vi) %>%
-  st_drop_geometry() %>%
-  gather(key, old, -plot_cluster) %>%
-  mutate(key = gsub("^vipphen_", "", .$key))
-
-compare <- dat_clean %>%
-  dplyr::select(plot_cluster, avg_vi, cum_vi, starts_with("s1")) %>%
-  st_drop_geometry() %>%
-  gather(key, new, -plot_cluster) %>%
-  left_join(., old_gather, by = c("plot_cluster", "key")) %>%
-  filter(!key %in% c("min_vi", "max_vi"), 
-  !(old < 150 & key == "s1_start"))
-
-pdf(file = "img/old_new_compare.pdf", width = 12, height = 8)
-ggplot() + 
-  geom_point(data = compare, aes(x = old, y = new), 
-    alpha = 0.8, colour = "black", fill = pal[5], shape = 21) + 
-  geom_smooth(data = compare, aes(x = old, y = new), 
-    method = "lm", colour = pal[1]) + 
-  facet_wrap(~key, scales = "free") + 
-  theme_panel() + 
-  labs(x = "MODIS VIPPHEN", y = "MOD13Q1")
-dev.off()
-
-# histogram of raw data
-pdf(file =  "img/hist_raw.pdf", width = 12, height = 10)
-dat_clean %>% 
-  dplyr::select(names(pred_lookup), -cluster) %>%
+# Density plots of phenolgical metrics per cluster
+pdf(file =  "img/phen_dens_clust.pdf", width = 12, height = 10)
+dat_clean %>%
+  dplyr::select(names(resp_lookup), cluster) %>%
   st_drop_geometry() %>%
   as.data.frame() %>%
-  gather(variable, value) %>%
-  left_join(., data.frame(pred_lookup, raw = names(pred_lookup)), 
+  gather(variable, value, -cluster) %>%
+  left_join(., data.frame(resp_lookup, raw = names(resp_lookup)), 
     by = c("variable" = "raw")) %>%
-  dplyr::select(variable = pred_lookup, value) %>% 
-  mutate(variable = factor(variable, levels = pred_lookup)) %>%
-  ggplot(aes(x = value)) + 
-  geom_histogram(colour = "black", fill = pal[5]) + 
+  dplyr::select(variable = resp_lookup, value, cluster) %>% 
+  mutate(variable = factor(variable, levels = resp_lookup)) %>%
+  ggplot(., aes(x = value, colour = cluster)) + 
+  geom_density(size = 1.5) + 
   facet_wrap(~variable, scales = "free") + 
-  labs(x = "", y = "") + 
+  labs(x = "", y = "") +
+  scale_colour_manual(values = clust_pal) + 
   theme_panel()
 dev.off()
 
@@ -133,7 +109,25 @@ bivar_list <- c(
   "s1_start ~ evenness",
   "s1_start ~ n_stems_gt10_ha",
   "s1_start ~ map",
-  "s1_start ~ diurnal_temp_range"
+  "s1_start ~ diurnal_temp_range",
+
+  "s1_end ~ richness",
+  "s1_end ~ evenness",
+  "s1_end ~ n_stems_gt10_ha",
+  "s1_end ~ map",
+  "s1_end ~ diurnal_temp_range",
+
+  "start_lag ~ richness",
+  "start_lag ~ evenness",
+  "start_lag ~ n_stems_gt10_ha",
+  "start_lag ~ map",
+  "start_lag ~ diurnal_temp_range", 
+
+  "end_lag ~ richness",
+  "end_lag ~ evenness",
+  "end_lag ~ n_stems_gt10_ha",
+  "end_lag ~ map",
+  "end_lag ~ diurnal_temp_range"
 )
 
 bivar_df <- as.data.frame(do.call(rbind, lapply(bivar_list, function(x) {
@@ -156,12 +150,13 @@ ggplot() +
   geom_point(data = bivar_df, aes(x = pred, y = resp, fill = cluster), 
 	colour = "black", shape = 21) +
   geom_line(data = bivar_df, aes(x = pred, y = resp),
-	stat = "smooth", method = "lm", colour = pal[1], se = FALSE, size = 1.5) + 
-  geom_line(data = bivar_df, aes(x = pred, y = resp), 
-	stat = "smooth", method = "loess", colour = pal[2], se = FALSE, size = 1.5) + 
+	stat = "smooth", method = "lm", colour = "black", se = FALSE, size = 1.5) + 
+  geom_line(data = bivar_df, aes(x = pred, y = resp, colour = cluster), 
+	stat = "smooth", method = "lm", se = FALSE) + 
   facet_grid(y~x, scales = "free", 
     labeller = labeller(y = resp_lookup, x = pred_lookup)) +  
   scale_fill_manual(name = "", values = clust_pal) + 
+  scale_colour_manual(name = "", values = brightness(clust_pal, 0.5)) + 
   theme_panel() + 
   labs(x = "", y = "")
 dev.off()
@@ -171,8 +166,6 @@ dat_std <- dat_clean %>%
   mutate_at(.vars = c(
       "richness",
       "evenness", 
-      "n_stems_gt10_ha",
-      "map",
       "diurnal_temp_range"),
     .funs = list(std = ~(scale(.) %>% as.vector))) %>%
   dplyr::select(ends_with("_std"), cluster, names(resp_lookup), geometry) %>%
@@ -254,9 +247,9 @@ phen_mod("s1_start", "s")
 # Fit models
 max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt10_ha + 
   map + diurnal_temp_range + 
-  Matern(1 | x + y) + (1|cluster) , data = dat_std, family = "gaussian")
+  (1|cluster) + Matern(1 | x + y), data = dat_std, family = "gaussian")
 null_mod_spamm_c <- fitme(cum_vi ~ map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
+    Matern(1 | x + y) + (1|cluster), data = dat_std, family = "gaussian")
 
 max_mod_spamm_l <- fitme(s1_length ~ richness + evenness + n_stems_gt10_ha + 
     cluster + map + diurnal_temp_range + 

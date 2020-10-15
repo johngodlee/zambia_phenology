@@ -1,86 +1,66 @@
-# Get MODIS 250 m (MOD13Q1) raw time series
+# LAI extraction 
 # John Godlee (johngodlee@gmail.com)
-# 2020-08-24
-
-# Downloaded 4 granules
-# 2015 - present
-# 22 scenes per year per granule.
-# 517 files total
-# MOD13Q1.A2015001.h20v10.006.2015295100845.hdf 
-# PRODUCT.DATEAQUI.GRANUL.VER.DATEOFPRODUCT.hdf
+# 2020-10-09
 
 # Set working directory
 
 # Packages
-library(rgdal)
+library(dplyr)
+library(tidyr)
+library(sf)
+library(raster)
 library(stringr)
 library(gdalUtils)
-library(sf)
-library(tidyr)
-library(dplyr)
-library(raster)
 library(readr)
 
 source("functions.R")
 
 # Import plot data 
-plots <- readRDS("dat/plots.rds")
+dat <- readRDS("dat/plots.rds")
 
 # Get HDF file names 
-files <- list.files("/Volumes/UNTITLED/modis_250", pattern = "*.hdf", 
+files <- list.files("/Volumes/john/modis_lai", pattern = "*.hdf", 
   full.names = TRUE)
 
+# Split by granule
 files_split <- split(files, granExtract(files))
 
-# Define CRS
+# Define sinusoidal CRS
 crs_sinus <- CRS("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs")
 
-# Create directory for output
+# Define directory paths
 data_dir <- "dat"
-out_dir <- file.path(data_dir, "evi_tif")
+out_dir <- file.path(data_dir, "lai_tif")
 if (!dir.exists(out_dir)) {
   dir.create(out_dir)
 }
 
-# Define parameters 
-nodata <- -3000
-scaledata <- 0.000001
-
-# For each granule:
-for (i in seq(length(files_split))) {
+for (i in c(2,3,4)) {
 
   # Get band names
-  evi_list <- paste0("HDF4_EOS:EOS_GRID:", files_split[[i]], 
-    ":MODIS_Grid_16DAY_250m_500m_VI:250m 16 days EVI")
+  lai_list <- paste0("HDF4_EOS:EOS_GRID:", files_split[[i]], 
+    ":MOD_Grid_MOD15A2H:Lai_500m")
 
   # Get .tif names
   out_names <- gsub("\\.hdf$", ".tif", 
-    gsub(":.*", "", basename(evi_list)))
+    gsub(":.*", "", basename(lai_list)))
 
   # For each scene within a granule, create tif files 
-  for (j in seq(length(evi_list))) {
-    gdal_translate(evi_list[j], 
-      dst_dataset = file.path(out_dir, out_names[j]), 
-      a_nodata = nodata)
+  for (j in seq(length(lai_list))) {
+    gdal_translate(lai_list[j], 
+      dst_dataset = file.path(out_dir, out_names[j]))
     }
 
-  # Read in .tif files
   tif_list <- lapply(list.files(out_dir, "*.tif", full.names = TRUE), raster)
-  lapply(tif_list, function(x) {
-    NAvalue(x) <- nodata
-      })
 
-  # Rename stack layers to acquisition date
   names(tif_list) <- unlist(lapply(tif_list, function(x) {
       str_extract(names(x), "A[0-9]{7}")
   }))
 
-  # Filter plots by granule coverage
   tif_poly <- st_as_sfc(st_bbox(tif_list[[1]])) %>%
     st_transform(., 4326)
-  plots_fil <- st_filter(plots, tif_poly)
+  plots_fil <- st_filter(dat, tif_poly)
 
-  # For each scene within a granule, extract plot values 
   for (j in seq(length(tif_list))) {
     out <- as.character(raster::extract(tif_list[[j]], plots_fil, method = "bilinear"))
     outfile <- file.path(out_dir, paste0(names(tif_list)[j], "_", granExtract(files_split[[i]][1]), ".txt"))
@@ -91,9 +71,6 @@ for (i in seq(length(files_split))) {
   # Write file with plot cluster IDs
   plot_cls_file <- file.path(out_dir, paste0(granExtract(files_split[[i]][1]), "_plot_id.txt"))
   write_lines(plots_fil$plot_cluster, plot_cls_file)
-
-  # Remove .tif files
-  file.remove(file.path(out_dir, out_names))
 
   # Import .txt files, make columns in dataframe
   extract_files <- list.files(out_dir, "*.txt", full.names = TRUE)
@@ -108,16 +85,18 @@ for (i in seq(length(files_split))) {
 
   # Make dataframe clean
   extract_df_clean <- extract_df %>%
-    gather(scene, evi, -plot_cluster, -granule) %>%
-    mutate(date = as.Date(scene, "A%Y%j"),
-      evi = as.numeric(evi) * scaledata) 
+    gather(scene, lai, -plot_cluster, -granule) %>%
+    mutate(date = as.Date(scene, "A%Y%j"))
 
   # Write .csv for granule
   write.csv(extract_df_clean, file.path(data_dir, 
-      paste0("evi_", granExtract(files_split[[i]][1]), "_extract.csv")), 
+      paste0("lai_", granExtract(files_split[[i]][1]), "_extract.csv")), 
     row.names = FALSE)
     
   # Remove .txt files
   file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
+
+  # Remove .tif files
+  file.remove(file.path(out_dir, out_names))
 }
 
