@@ -30,11 +30,6 @@ plots <- readRDS("dat/plots.rds")
 files <- list.files("/Volumes/UNTITLED/modis_250", pattern = "*.hdf", 
   full.names = TRUE)
 
-# Split file names by granule
-granExtract <- function(x) { 
-  str_extract(x, "h[0-9][0-9]v[0-9][0-9]")
-}
-
 files_split <- split(files, granExtract(files))
 
 # Define CRS
@@ -42,7 +37,7 @@ crs_sinus <- CRS("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.18
 
 # Create directory for output
 data_dir <- "dat"
-out_dir <- file.path(data_dir, "tif")
+out_dir <- file.path(data_dir, "evi_tif")
 if (!dir.exists(out_dir)) {
   dir.create(out_dir)
 }
@@ -55,8 +50,8 @@ scaledata <- 0.000001
 for (i in seq(length(files_split))) {
 
   # Get band names
-  band_list <- lapply(files_split[[i]], get_subdatasets)
-  evi_list <- unlist(lapply(band_list, `[`, 2))
+  evi_list <- paste0("HDF4_EOS:EOS_GRID:", files_split[[i]], 
+    ":MODIS_Grid_16DAY_250m_500m_VI:250m 16 days EVI")
 
   # Get .tif names
   out_names <- gsub("\\.hdf$", ".tif", 
@@ -118,7 +113,9 @@ for (i in seq(length(files_split))) {
       evi = as.numeric(evi) * scaledata) 
 
   # Write .csv for granule
-  write.csv(extract_df_clean, file.path(data_dir, paste0(granExtract(files_split[[i]][1]), "_extract.csv")), row.names = FALSE)
+  write.csv(extract_df_clean, file.path(data_dir, 
+      paste0("evi_", granExtract(files_split[[i]][1]), "_extract.csv")), 
+    row.names = FALSE)
     
   # Remove .txt files
   file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
