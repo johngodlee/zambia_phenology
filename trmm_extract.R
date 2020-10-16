@@ -25,11 +25,11 @@ trmm_list <- split(trmm, trmm$plot_cluster)
 
 trmm_seas_list <- lapply(trmm_list, function(x) {
   list(
-    s_2015 = seasonGet(x, "2015-12-31", "2016-12-31"),
-    s_2016 = seasonGet(x, "2016-12-31", "2017-12-31"),
-    s_2017 = seasonGet(x, "2017-12-31", "2018-12-31"),
-    s_2018 = seasonGet(x, "2018-12-31", "2019-12-31"),
-    s_2019 = seasonGet(x, "2019-12-31", "2020-12-31")
+    s_2015 = seasonGet(x, "2015-07-01", "2016-11-01"),
+    s_2016 = seasonGet(x, "2016-07-01", "2017-11-01"),
+    s_2017 = seasonGet(x, "2017-07-01", "2018-11-01"),
+    s_2018 = seasonGet(x, "2018-07-01", "2019-11-01"),
+    s_2019 = seasonGet(x, "2019-07-01", "2020-11-01")
   )
 })
 
@@ -38,6 +38,7 @@ trmm_clean <- do.call(rbind, do.call(rbind, trmm_seas_list)) %>%
 
 saveRDS(trmm_clean, "dat/trmm_ts.rds")
 
+# Plot raw data
 pdf(file = "img/trmm_ts.pdf", width = 12, height = 8)
 ggplot() +
   geom_path(data = trmm_clean, aes(x = date, y = precip, group = plot_cluster),
@@ -49,10 +50,13 @@ ggplot() +
     panel.grid.minor = element_blank())
 dev.off()
 
+# Split by plot cluster
 trmm_split <- split(trmm_clean, trmm_clean$plot_cluster)
 
+# Generate predict data
 pred_data <- seq(min(trmm_split[[1]]$doy), max(trmm_split[[1]]$doy))
 
+# Generate GAMs across maximum precip per 7 days
 gam_list <- lapply(trmm_split, function(x) {
   roll <- rollmax(x$precip, k = 7, na.pad = TRUE, align = "right")
   roll[roll == 0] <- NA_real_
@@ -68,7 +72,7 @@ gam_list <- lapply(trmm_split, function(x) {
 trmm_df <- data.frame(plot_cluster = names(gam_list))
 
 # Define change in slope parameter
-slc <- 0.05
+slc <- 0.06
 
 # Start and end of growing season
 ##' Using first derivatives of GAM
@@ -79,7 +83,7 @@ trmm_df$trmm_start <- unlist(lapply(gam_list, function(x) {
 
   der <- derivatives(mod, type = "forward")
 
-  der_fil <- der[der$data > 100,]
+  der_fil <- der[der$data > -150,]
 
   round(pull(der_fil[which(der_fil$derivative >= slc), "data"])[1])
 }))
@@ -89,7 +93,7 @@ trmm_df$trmm_end <- unlist(lapply(gam_list, function(x) {
 
   der <- derivatives(mod, type = "backward")
 
-  der_fil <- der[der$data < 350,]
+  der_fil <- der[der$data < 200,]
 
   round(last(pull(der_fil[which(der_fil$derivative <= -slc), "data"])))
 }))
@@ -98,9 +102,53 @@ trmm_df$trmm_end <- unlist(lapply(gam_list, function(x) {
 ##' Days between start and end
 trmm_df$trmm_length <- trmm_df$trmm_end - trmm_df$trmm_start
 
+# Cumulative precipitation in wet season
+gam_fil <- lapply(seq(length(gam_list)), function(x) {
+  mod <- gam_list[[x]][[2]]
+  mod[mod$doy >= trmm_df[x, "trmm_start"] & mod$doy <= trmm_df[x, "trmm_end"],]
+})
+
+trmm_df$cum_precip <- unlist(lapply(seq(length(gam_fil)), function(x) {
+  sum(gam_fil[[x]]$pred)
+}))
+
 trmm_df_clean <- trmm_df %>%
   left_join(., dat, by = "plot_cluster") %>%
   filter(!is.na(trmm_start))
+
+# Make a plot which demonstrates all the different numeric phenology stats
+stat_plot <- function(x, raw = FALSE) {
+  # Predict values of greenup and senescence rate
+  p <- ggplot()
+
+  if (raw) {
+    trmm_raw <- trmm_clean %>% 
+      filter(plot_cluster == names(gam_list[x]))
+
+    p <- p + geom_path(data = trmm_raw, aes(x = doy, y = precip, group = season),
+      alpha = 0.5) 
+  }
+
+  p <- p + 
+    geom_path(data = gam_list[[x]][[2]], aes(x = doy, y = pred), size = 1.5)
+
+  p + 
+    geom_vline(xintercept = trmm_df_clean[
+        trmm_df_clean$plot_cluster == names(gam_list[x]), "trmm_start"], 
+      colour = "green") + 
+    geom_vline(xintercept = trmm_df_clean[
+        trmm_df_clean$plot_cluster == names(gam_list[x]), "trmm_end"], 
+      colour = "brown") + 
+    theme_panel() + 
+    labs(x = "Days from 1st Jan.", y = "precip") + 
+    ggtitle(names(gam_list[x]))
+}
+
+plot_list <- lapply(sample(length(gam_list), 50), stat_plot)
+
+pdf(file = "trmm_example.pdf", width = 15, height = 10) 
+grid.arrange(grobs = plot_list)
+dev.off()
 
 # Write data 
 saveRDS(trmm_df_clean, "dat/plots_trmm.rds")
