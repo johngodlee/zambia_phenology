@@ -146,7 +146,7 @@ stat_plot <- function(x, raw = FALSE) {
 
 plot_list <- lapply(sample(length(gam_list), 50), stat_plot)
 
-pdf(file = "trmm_example.pdf", width = 15, height = 10) 
+pdf(file = "img/trmm_example.pdf", width = 15, height = 10) 
 grid.arrange(grobs = plot_list)
 dev.off()
 
