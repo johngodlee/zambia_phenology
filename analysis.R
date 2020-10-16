@@ -55,9 +55,38 @@ dat_clean <- dat %>%
     start_lag = s1_start - trmm_start,
     end_lag = s1_end - trmm_end)
 
-ggplot() + 
-  geom_density(data = dat_clean, aes(x = s1_start), colour = "green") + 
-  geom_density(data = dat_clean, aes(x = trmm_start), colour = "blue") 
+  
+start_dens_plot <- dat_clean %>%
+  dplyr::select(s1_start, trmm_start, cluster) %>%
+  st_drop_geometry() %>%
+  gather(variable, value, -cluster) %>%
+  ggplot(., aes(x = value, colour = variable)) + 
+    geom_density() + 
+    scale_colour_manual(name = "", 
+      labels = c("Growth season start", "Rainy season start"), 
+      values = pal[c(2,1)]) + 
+    facet_wrap(~cluster) + 
+    theme_panel() + 
+    theme(legend.position = "bottom") + 
+    labs(x = "DOY", y = "Frequency")
+
+end_dens_plot <- dat_clean %>%
+  dplyr::select(s1_end, trmm_end, cluster) %>%
+  st_drop_geometry() %>%
+  gather(variable, value, -cluster) %>%
+  ggplot(., aes(x = value, colour = variable)) + 
+    geom_density() + 
+    scale_colour_manual(name = "", 
+      labels = c("Growth season end", "Rainy season end"), 
+      values = pal[c(2,1)]) + 
+    facet_wrap(~cluster) + 
+    theme_panel() + 
+    theme(legend.position = "bottom") + 
+    labs(x = "DOY", y = "Frequency")
+
+pdf(file = "img/dens_lag.pdf", width = 10, height = 12)
+grid.arrange(grobs = list(start_dens_plot, end_dens_plot), ncol = 1)
+dev.off()
 
 # How many sites are there?
 write(
@@ -167,10 +196,7 @@ dev.off()
 
 # Standardise variables
 dat_std <- dat_clean %>% 
-  mutate_at(.vars = c(
-      "richness",
-      "evenness", 
-      "diurnal_temp_range"),
+  mutate_at(.vars = names(pred_lookup)[which(names(pred_lookup) != "cluster")],
     .funs = list(std = ~(scale(.) %>% as.vector))) %>%
   dplyr::select(ends_with("_std"), cluster, names(resp_lookup), geometry) %>%
   rename_at(.vars = vars(ends_with("_std")), 
@@ -432,4 +458,65 @@ ggplot() +
   scale_fill_manual(name = "", values = clust_pal) + 
   labs(x = "", y = "")
 dev.off()
+
+# Procrustes
+
+## Create two datasets, climate and phenology
+phen_dat <- dat_std %>%
+  dplyr::select(cluster, start_lag, cum_vi, end_lag, s1_length, 
+    s1_green_rate, s1_senes_rate)
+
+clim_dat <- dat_std %>% 
+  dplyr::select(cluster, map, trmm_start, trmm_end, cum_precip, mat)
+  ##' Need better estimates than MAP and MAT
+
+## Split each dataset by cluster
+phen_split <- split(phen_dat, phen_dat$cluster)
+clim_split <- split(clim_dat, clim_dat$cluster)
+
+## PCA on each dataset
+phen_pca_list <- lapply(phen_split, pca)
+clim_pca_list <- lapply(clim_split, pca)
+
+## Procrustes analysis on ordination axes or two PCAs
+procrustes_list <- lapply(seq(length(phen_pca_list)), procrustes)
+
+## Take PAM (residuals, m^2) from Procrustes 
+
+## PAM as response variable in regression of `lm(PAM ~ richness)`
+
+
+
+# Lag time models
+##' Does the lag time between start/end of rainy season and start/end of growing season vary according to species richness?
+
+library(lme4)
+
+start_mod <- lmer(start_lag ~ richness + (richness | cluster), data = dat_clean)
+
+start_mod_pred <- ggpredict(start_mod, terms = c("richness", "cluster"), type = "re")
+
+ggplot() + 
+  geom_point(data = dat_clean, aes(x = richness, y = start_lag, fill = cluster), 
+    shape = 21, colour = "black") + 
+  geom_line(data = start_mod_pred, aes(x = x, y = predicted, colour = group),
+    size = 2) + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  theme_panel() + 
+  labs(x = "Speces richness", y = "Season start lag (days)")
+
+end_mod <- lmer(end_lag ~ richness + (richness | cluster), data = dat_clean)
+
+end_mod_pred <- ggpredict(end_mod, terms = c("richness", "cluster"), type = "re")
+
+ggplot() + 
+  geom_line(data = end_mod_pred, aes(x = x, y = predicted, colour = group),
+    size = 2) + 
+  geom_point(data = dat_clean, aes(x = richness, y = end_lag, fill = cluster), 
+    shape = 21, colour = "black") + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  theme_panel() + 
+  labs(x = "Speces richness", y = "Season end lag (days)")
 
