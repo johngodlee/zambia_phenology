@@ -55,6 +55,10 @@ dat_clean <- dat %>%
     start_lag = s1_start - trmm_start,
     end_lag = s1_end - trmm_end)
 
+ggplot() + 
+  geom_density(data = dat_clean, aes(x = s1_start), colour = "green") + 
+  geom_density(data = dat_clean, aes(x = trmm_start), colour = "blue") 
+
 # How many sites are there?
 write(
   commandOutput(nrow(dat_clean), "nSites"),

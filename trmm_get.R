@@ -8,7 +8,7 @@
 library(sf)
 library(dplyr)
 library(raster)
-library(gdalUtils)
+library(ncdf4)
 library(stringr)
 library(readr)
 library(tidyr)
@@ -29,31 +29,31 @@ if (!dir.exists(out_dir)) {
   dir.create(out_dir)
 }
 
-# Get band names
-band_list <- lapply(files, get_subdatasets)
-trmm_list <- unlist(lapply(band_list, `[`, 1))
-
 # Get .tif names
-out_names <- gsub("\\.nc4$", ".tif", 
-  gsub(":.*", "", basename(trmm_list)))
+out_names <- gsub("\\.nc4$", ".tif", basename(files))
 
 # Define bounding box to crop to
 zam_bbox <- st_bbox(dat)
 
 # For each scene, create tif files 
-for (j in seq(length(trmm_list))) {
-  gdal_translate(trmm_list[j], 
-    dst_dataset = file.path(out_dir, out_names[j]))
+for (i in seq(length(files))) {
+  nc_file <- nc_open(files[i])
+  precip_array <- ncvar_get(nc_file, "precipitationCal")
+  fillvalue <- ncatt_get(nc_file, "precipitationCal", "_FillValue")
+  lon <- ncvar_get(nc_file, "lon")
+  lat <- ncvar_get(nc_file, "lat")
+  nc_close(nc_file) 
+  precip_array[precip_array == fillvalue$value] <- NA
 
-  x <- raster(file.path(out_dir, out_names[j]))
-  x <- t(flip(x, direction='y'))
-  crs(x) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+  r <- raster(precip_array, 
+    xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), 
+    crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0"))
+  
+  r <- flip(r, direction='y')
 
-  x <- crop(x, zam_bbox[c(1,3,2,4)])
+  r_crop <- crop(r, zam_bbox[c(1,3,2,4)])
 
-  file.remove(file.path(out_dir, out_names[j]))
-
-  writeRaster(x, file.path(out_dir, out_names[j]), overwite = TRUE)
+  writeRaster(r_crop, file.path(out_dir, out_names[i]), overwite = TRUE)
 }
 
 # Read in .tif files
@@ -76,9 +76,6 @@ lapply(seq(length(tif_list)), function(j) {
 plot_cls_file <- file.path(out_dir, "plot_id.txt")
 write_lines(dat$plot_cluster, plot_cls_file)
 
-# Remove .tif files
-file.remove(file.path(out_dir, out_names))
-
 # Import .txt files, make columns in dataframe
 extract_files <- list.files(out_dir, "*.txt", full.names = TRUE)
 extract_vec <- lapply(extract_files, readLines)
@@ -99,5 +96,7 @@ write.csv(extract_df_clean, file.path(data_dir, "trmm_extract.csv"), row.names =
 # Remove .txt files
 file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
 
+# Remove .tif files
+file.remove(file.path(out_dir, out_names))
 
 

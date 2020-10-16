@@ -216,7 +216,7 @@ phen_all <- dat %>%
 saveRDS(phen_all, "dat/plots_phen.rds")
 
 # Make a plot which demonstrates all the different numeric phenology stats
-growth_stat_plot <- function(x, raw = FALSE) {
+stat_plot <- function(x, raw = FALSE) {
   # Predict values of greenup and senescence rate
   if (class(s1_greenup_mod_list[[x]][[1]]) == "lm") {
   greenup_pred <- predict(s1_greenup_mod_list[[x]][[1]])
@@ -255,20 +255,22 @@ growth_stat_plot <- function(x, raw = FALSE) {
   }
   p + 
     geom_vline(xintercept = gam_list[[x]][[2]][which(gam_list[[x]][[2]][["pred"]] == phen_df[x, "max_vi"]), "doy"], colour = pal[4]) + 
+    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list[x]), "s1_start"]) %>% pull(), colour = "green") + 
+    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list[x]), "s1_end"]) %>% pull(), colour = "blue") + 
     theme_panel() + 
     labs(x = "Days from 1st Jan.", y = "EVI") + 
     ggtitle(names(gam_list[x]))
 }
 
 sam <- sample(seq(length(gam_list)), 50)
-ts_stat_plot_list <- lapply(sam, growth_stat_plot) 
+ts_stat_plot_list <- lapply(sam, stat_plot) 
 
 pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)
 grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
 dev.off()
 
 # Example plot on its own
-ts_example_plot <- growth_stat_plot(598, raw = TRUE)
+ts_example_plot <- stat_plot(598, raw = TRUE)
 
 pdf(file = "img/ts_example.pdf", width = 8, height = 6)
 ts_example_plot + 
