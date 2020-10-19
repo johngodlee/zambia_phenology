@@ -11,6 +11,7 @@ library(sf)
 library(mgcv)
 library(zoo)
 library(gratia)
+library(gridExtra)
 
 source("functions.R")
 
@@ -108,8 +109,15 @@ gam_fil <- lapply(seq(length(gam_list)), function(x) {
   mod[mod$doy >= trmm_df[x, "trmm_start"] & mod$doy <= trmm_df[x, "trmm_end"],]
 })
 
-trmm_df$cum_precip <- unlist(lapply(seq(length(gam_fil)), function(x) {
+trmm_df$cum_precip_seas <- unlist(lapply(seq(length(gam_fil)), function(x) {
   sum(gam_fil[[x]]$pred)
+}))
+
+# Cumulative precipitation in dry season before wet season (pre-season 90 days)
+trmm_df$cum_precip_pre <- unlist(lapply(seq(length(gam_list)), function(x) {
+  mod <- gam_list[[x]][[2]]
+  season_start <- trmm_df[x, "trmm_start"]
+  sum(mod[mod$doy <= season_start & mod$doy >= (season_start - 90), "pred"])
 }))
 
 trmm_df_clean <- trmm_df %>%
