@@ -6,19 +6,17 @@
 library(sf)
 library(dplyr)
 library(tidyr)
+library(tibble)
 library(ggplot2)
-library(ggrepel)
 library(shades)
 library(ggnewscale)
-library(viridis)
 library(gridExtra)
-library(sjPlot)
-library(spaMM)
-library(DHARMa)
-library(hier.part)
 library(xtable)
 library(raster)
 library(vegan)
+library(lme4)
+library(purrr)
+library(MuMIn)
 
 source("functions.R")
 
@@ -35,8 +33,10 @@ zambia <- af %>%
 
 # Define variable name translation lookup
 pred_lookup <- c("Richness", "Evenness", "Tree density", "MAP",
+  "Wet season precip", "Dry season precip",
     "Vegetation type", "Diurnal dT")
 names(pred_lookup) <- c("richness", "evenness", "n_stems_gt10_ha", "map",
+  "cum_precip_seas", "cum_precip_pre",
   "cluster", "diurnal_temp_range")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
@@ -54,7 +54,6 @@ dat_clean <- dat %>%
   mutate(cluster = factor(cluster, labels = clust_lookup),
     start_lag = s1_start - trmm_start,
     end_lag = s1_end - trmm_end)
-
   
 start_dens_plot <- dat_clean %>%
   dplyr::select(s1_start, trmm_start, cluster) %>%
@@ -214,231 +213,186 @@ corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "cluster")]]) +
 dev.off()
 ##' None are correlated over r = 0.7, so no serious collinearity
 
-# Linear models ----
 
-# Define model function
-phen_mod <- function(var, pre) {
-  # Raw data by group
-  pdf(file = paste0("img/", pre, "_richness.pdf"), height = 8, width = 10)
-  bivar <- ggplot(data = dat_std, 
-    aes_string(x = "richness", y = var)) + 
-    geom_point() + 
-    stat_smooth(method = "lm", se = TRUE)
-  print(bivar)
-  dev.off()
-
-  # Define maximal model
-  max_mod <- lm(get(var) ~ richness + evenness + n_stems_gt10_ha + 
-    cluster + map + diurnal_temp_range, 
-    data = dat_std)
-
-  # Summary
-  capture.output(summary(max_mod), file = paste0("out/", pre, "_mod_summary.txt"))
-
-  # QQ plot
-  pdf(file = paste0("img/", pre, "_max_mod_qq.pdf"), width = 8, height = 8)
-  qqnorm(resid(max_mod))
-  qqline(resid(max_mod))
-  dev.off()
-
-  # Fixed effect slopes 
-  pdf(file = paste0("img/", pre, "_max_mod_slopes.pdf"), width = 12, height = 10)
-  fe_slope <- plot_model(max_mod, show.values = TRUE)
-  print(fe_slope)
-  dev.off()
-
-  # Reduced model comparison 
-  max_mod_ml <- lm(get(var) ~ 
-    richness + evenness + n_stems_gt10_ha + cluster + 
-    map + diurnal_temp_range,
-  data = dat_std)
-
-  div_mod_ml <- lm(get(var) ~ richness + evenness, data = dat_std)
-
-  env_mod_ml <- lm(get(var) ~ map + diurnal_temp_range, data = dat_std)
-
-  mod_ml_list <- mget(c("max_mod_ml", "div_mod_ml", "env_mod_ml"))
-
-  mod_compare_anova <- eval(parse(text=paste("anova(",
-        paste("mod_ml_list[[",1:length(mod_ml_list),"]]",sep="",collapse=","),")")))
-
-  capture.output(mod_compare_anova, file = paste0("out/", pre, "_mod_compare.txt"))
-}
-
-# Run function for key responses
-phen_mod("cum_vi", "c")
-phen_mod("s1_length", "l")
-phen_mod("s1_green_rate", "r")
-phen_mod("s1_senes_rate", "d")
-phen_mod("s1_start", "s")
-
-# spaMM models with spatial autocorrelation ----
+# Mixed models with cluster random effects ----
 
 # Fit models
-max_mod_spamm_c <- fitme(cum_vi ~ richness + evenness + n_stems_gt10_ha + 
-  map + diurnal_temp_range + 
-  (1|cluster) + Matern(1 | x + y), data = dat_std, family = "gaussian")
-null_mod_spamm_c <- fitme(cum_vi ~ map + diurnal_temp_range + 
-    Matern(1 | x + y) + (1|cluster), data = dat_std, family = "gaussian")
+max_mod_c <- lmer(cum_vi ~ richness + evenness + cum_precip_seas + 
+  diurnal_temp_range + (richness|cluster), 
+  data = dat_std)
+null_mod_c <- lmer(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
+  (1|cluster), 
+  data = dat_std)
 
-max_mod_spamm_l <- fitme(s1_length ~ richness + evenness + n_stems_gt10_ha + 
-    cluster + map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
-null_mod_spamm_l <- fitme(s1_length ~ map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
+max_mod_l <- lmer(s1_length ~ richness + evenness + 
+  cum_precip_seas + diurnal_temp_range + (richness|cluster), 
+  data = dat_std)
+null_mod_l <- lmer(s1_length ~ cum_precip_seas + diurnal_temp_range + 
+  (1|cluster), 
+  data = dat_std)
 
-max_mod_spamm_r <- fitme(s1_green_rate ~ richness + evenness + n_stems_gt10_ha + 
-    cluster + map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
-null_mod_spamm_r <- fitme(s1_green_rate ~ map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
+max_mod_r <- lmer(s1_green_rate ~ richness + evenness + cum_precip_pre + 
+  (richness|cluster),
+  data = dat_std)
+null_mod_r <- lmer(s1_green_rate ~ cum_precip_pre + (1|cluster), 
+  data = dat_std)
 
-max_mod_spamm_d <- fitme(s1_senes_rate ~ richness + evenness + n_stems_gt10_ha + 
-    cluster + map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
-null_mod_spamm_d <- fitme(s1_senes_rate ~ map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
+max_mod_d <- lmer(s1_senes_rate ~ richness + evenness + cum_precip_seas + 
+  (richness|cluster), 
+  data = dat_std)
+null_mod_d <- lmer(s1_senes_rate ~ cum_precip_seas + 
+  (1|cluster),
+  data = dat_std)
 
-max_mod_spamm_s <- fitme(s1_start ~ richness + evenness + n_stems_gt10_ha + 
-    cluster + map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
-null_mod_spamm_s <- fitme(s1_start ~ map + diurnal_temp_range + 
-    Matern(1 | x + y), data = dat_std, family = "gaussian")
+max_mod_s <- lmer(start_lag ~ richness + evenness + 
+  (richness|cluster), data = dat_std)
+null_mod_s <- lmer(start_lag ~ (1|cluster), data = dat_std)
+
+max_mod_e <- lmer(end_lag ~ richness + evenness +
+  (richness|cluster), data = dat_std, na.action = na.omit)
+null_mod_e <- lmer(end_lag ~ (1|cluster), data = dat_std)
 
 # Define model summary function
-phen_spamm_mod <- function(max_mod, null_mod, pre) {
+modSumm <- function(max_mod, null_mod, pre) {
+
+  # Predicted values
+  mod_pred <- predict(max_mod)
+  mod_pred_df <- data.frame(cluster = names(mod_pred), pred = as.numeric(unname(mod_pred)))
 
   # Model summary
-  mod_pred <- predict(max_mod)
   mod_summ <- summary(max_mod)
-  mod_lrt <- LRT(max_mod, null_mod)
-  max_aic <- AIC(max_mod)
-  max_ef_dof <- extractAIC(max_mod)
-  null_aic <- AIC(null_mod)
-  mod_eff <- spammEff(max_mod)
+  rsq <- do.call(rbind, lapply(list(max_mod, null_mod), r.squaredGLMM))
+  mod_stat_df <- data.frame(mod = c("max_mod", "null_mod"),
+    aic = c(AIC(max_mod, null_mod)[,2]), 
+    bic = c(BIC(max_mod, null_mod)[,2]), 
+    r2m = rsq[,1], 
+    r2c = rsq[,2],
+    logl = c(logLik(max_mod)[1], logLik(null_mod)[1]))
 
-  # Hierarchical partitioning
-  resp <- as.character(max_mod$predictor[[2]])
+  # Random effects
+  rand_ef <- ranef(max_mod)[[1]]
 
-  mod_hier <- hier.part(dat_std[[resp]], dat_std %>% 
-    dplyr::select(richness, evenness, n_stems_gt10_ha, cluster,
-      map, diurnal_temp_range), barplot = FALSE)
+  vars.m <- attr(rand_ef, "postVar")
+  K <- dim(vars.m)[1]
+  J <- dim(vars.m)[3]
+  names.full <- dimnames(rand_ef)
+  rand_se <- array(NA, c(J, K))
+  for (j in 1:J) {
+    rand_se[j, ] <- sqrt(diag(as.matrix(vars.m[, , j])))
+    }
+  dimnames(rand_se) <- list(names.full[[1]], names.full[[2]])
 
-  # Estimate degree of spatial autocorrelation
-  dd <- dist(dat_std[,c("x","y")])
-  mm <- MaternCorr(dd, 
-    nu = max_mod$corrPars$`1`$nu, rho = max_mod$corrPars$`1`$rho)
-  dist_df <- data.frame(dd = as.numeric(dd), mm = as.numeric(mm))
-  dist_df <- dist_df[order(dist_df$dd),]
-  pdf(file = paste0("img/", pre, "_max_mod_spamm_vario.pdf"), width = 4, height = 4)
-  plot(dist_df, type = "l",
-    xlab = "Pairwise distance (m)", 
-    ylab = "Estimated correlation")
-  dev.off()
+  ci_lvl <- 0.95
+  ci <- 1 - ((1 - ci_lvl) / 2)
 
-  # Simulate residuals for model diagnostics
-  sims <- simulateResiduals(max_mod)
-  pdf(file = paste0("img/", pre, "_max_mod_spamm_resids.pdf"), width = 8, height = 6)
-  plot(sims)
-  dev.off()
+  rand_ef <- rownames_to_column(rand_ef)
+  rand_se <- rownames_to_column(as.data.frame(rand_se))
+
+  grp.names <- colnames(rand_ef)
+  alabels <- rand_ef[["rowname"]]
+
+  rand_df <- map_df(2:ncol(rand_ef), function(i) {
+    out <- data.frame(estimate = rand_ef[[i]])
+
+    # Calculate confidence intervals
+    out$conf.low <- rand_ef[[i]] - (stats::qnorm(ci) * rand_se[[i]])
+    out$conf.high <- rand_ef[[i]] + (stats::qnorm(ci) * rand_se[[i]])
+    out$se <- (stats::qnorm(ci) * rand_se[[i]])
+
+    # set column names (variable / coefficient name)
+    # as group indicator, and save axis labels and title in variable
+    out$facet <- grp.names[i]
+    out$term <- factor(alabels)
+    # create default grouping, depending on the effect:
+    # split positive and negative associations with outcome
+    # into different groups
+    out$group <- dplyr::if_else(out$estimate > 0, "pos", "neg")
+
+    return(out)
+  })
 
   # Return list of model statistics
-  ##' 1. Model predictions 
-  ##' 2. Model summary 
-  ##' 3. Effect sizes 
-  ##' 4. Maximal model effective DoF
-  ##' 5. Maximal model AIC 
-  ##' 6. Null model AIC 
-  ##' 7. Likelihood Ratio Test 
-  ##' 8. Hierarchical partitioning
-  return(list(mod_pred, mod_summ, mod_eff, max_ef_dof, 
-      max_aic, null_aic, mod_lrt, mod_hier))
+  ##' 1. Max mod object
+  ##' 2. Null mod object
+  ##' 3. Model predicted values
+  ##' 4. Model summary 
+  ##' 5. Model fit statistics
+  ##' 6. Effect sizes for each random effect
+  return(list(max_mod, null_mod, mod_pred, mod_summ, mod_stat_df, rand_df))
 }
 
 # Summarise models
-spamm_c <- phen_spamm_mod(max_mod_spamm_c, null_mod_spamm_c, "c")
-spamm_l <- phen_spamm_mod(max_mod_spamm_l, null_mod_spamm_l, "l")
-spamm_r <- phen_spamm_mod(max_mod_spamm_r, null_mod_spamm_r, "r")
-spamm_d <- phen_spamm_mod(max_mod_spamm_d, null_mod_spamm_d, "d")
-spamm_s <- phen_spamm_mod(max_mod_spamm_s, null_mod_spamm_s, "s")
+summ_c <- modSumm(max_mod_c, null_mod_c, "c")
+summ_l <- modSumm(max_mod_l, null_mod_l, "l")
+summ_r <- modSumm(max_mod_r, null_mod_r, "r")
+summ_d <- modSumm(max_mod_d, null_mod_d, "d")
+summ_s <- modSumm(max_mod_s, null_mod_s, "s")
+summ_e <- modSumm(max_mod_e, null_mod_e, "e")
 
-spamm_list <- list(spamm_c, spamm_l, spamm_r, spamm_d, spamm_s)
+summ_list <- list(summ_c, summ_l, summ_r, summ_d, summ_s, summ_e)
 
-saveRDS(spamm_list, "dat/spamm_list.rds")
-spamm_list <- readRDS("dat/spamm_list.rds")
+saveRDS(summ_list, "dat/summ_list.rds")
+summ_list <- readRDS("dat/summ_list.rds")
 
 # Export model statistics table
-spamm_stat_df <- as.data.frame(do.call(rbind, lapply(spamm_list, function(x) {
+mod_stat_df <- as.data.frame(do.call(rbind, lapply(summ_list, function(x) {
       ##' If positive, max mod better
-      daic_m <- x[[6]][1] - x[[5]][1]
-      daic_c <- x[[6]][2] - x[[5]][2]
-      ef_dof <- x[[4]][1]
-  unlist(c(ef_dof, daic_m, daic_c, x[[7]]$basicLRT[1], x[[7]]$basicLRT[3]))
-})))
-spamm_stat_df$resp <- resp_lookup
-spamm_stat_df <- spamm_stat_df[,c(length(spamm_stat_df), seq(length(spamm_stat_df) - 1))]
+      daic <- x[[5]][2,2] - x[[5]][1,2]
+      dbic <- x[[5]][2,3] - x[[5]][1,3]
+      r2m <- x[[5]][1,4]
+      r2c <- x[[5]][1,5]
+      logl <- x[[5]][1,6]
 
-spamm_stat_df$p_value <- pFormat(spamm_stat_df$p_value, print_p = FALSE)
-
-spamm_stat_tab <- xtable(spamm_stat_df, 
-  label = "spamm_stat",
+  unlist(c(daic, dbic, r2m, r2c, logl))
+}))) 
+names(mod_stat_df) <- c("daic", "dbic", "r2m", "r2c", "logl")
+mod_stat_df$resp <- unlist(lapply(summ_list, function(x) {  names(x[[1]]@frame)[1] }))
+mod_stat_df <- mod_stat_df[,c(length(mod_stat_df), seq(length(mod_stat_df) - 1))]
+mod_stat_tab <- xtable(mod_stat_df, 
+  label = "mod_stat",
   align = "rrccccc",
-  display = c("s", "s", "d", "d", "d", "f", "s"),
+  display = c("s", "s", "f", "f", "f", "f", "f"),
   caption = "Model fit statistics for each phenological metric.")
 
 fileConn <- file("out/spamm_stat.tex")
-writeLines(print(spamm_stat_tab, include.rownames = FALSE, 
+writeLines(print(mod_stat_tab, include.rownames = FALSE, 
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)
 
 # Export model slopes plot
-spamm_eff_df <- do.call(rbind, lapply(spamm_list, function(x) {
-  resp <- gsub("\\s~.*", "", as.character(x[[7]][1]$nullfit$call)[2])
-  out <- x[[3]]
+mod_eff_df <- do.call(rbind, lapply(summ_list, function(x) {
+  resp <- names(x[[1]]@frame)[1] 
+  out <- as.data.frame(x[[4]]$coefficients)
   out$resp <- resp
-  row.names(out) <- NULL
-  out[,c(4,1,2,3)]
-}))
+  out <- rownames_to_column(out, "fixeff")
+  out[,c(5,1,2,3,4)]
+})) %>%
+  mutate(resp = factor(resp, levels = names(resp_lookup)),
+    fixeff = factor(fixeff, levels = rev(names(pred_lookup)), labels = rev(pred_lookup)),
+    pos_neg = if_else(Estimate >= 0, "pos", "neg")) %>%
+  filter(!is.na(fixeff)) %>%
+  rename(est = Estimate, se = `Std. Error`, tval = `t value`)
 
-spamm_eff_df$resp <- factor(spamm_eff_df$resp, levels = names(resp_lookup))
-
-spamm_eff_df$var <- gsub("cluster2", "cluster", spamm_eff_df$var)
-spamm_eff_df$var <- factor(spamm_eff_df$var, levels = rev(names(pred_lookup)),
-  labels = rev(pred_lookup))
-
-pdf(file = "img/mod_spamm_slopes.pdf", width = 14, height = 6)
+pdf(file = "img/mod_spamm_slopes.pdf", width = 12, height = 6)
 ggplot() + 
   geom_vline(xintercept = 0, linetype = 2) + 
-  geom_errorbarh(data = spamm_eff_df, 
-    aes(xmin = est - se, xmax = est + se, y = var), height = 0.1) + 
-  geom_point(data = spamm_eff_df, aes(x = est, y = var), 
-    shape = 21, fill = pal[5], colour = "black") + 
-  facet_wrap(~resp, scales = "free_x", nrow = 1,
+  geom_errorbarh(data = mod_eff_df, 
+    aes(xmin = est - se, xmax = est + se, y = fixeff, colour = pos_neg), 
+    height = 0.1) + 
+  geom_point(data = mod_eff_df, 
+    aes(x = est, y = fixeff, fill = pos_neg), 
+    shape = 21, colour = "black") + 
+  scale_colour_manual(values = pal[3:4]) + 
+  scale_fill_manual(values = pal[3:4]) + 
+  facet_wrap(~resp, scales = "free_x", nrow = 2,
     labeller = labeller(resp = resp_lookup)) +  
   theme_panel() + 
   theme(panel.grid.major.y = element_line(colour = pal[6]),
-    panel.spacing = unit(2.5, "lines")) + 
+    panel.spacing = unit(2.5, "lines"),
+    legend.position = "none") + 
   labs(x = "Slope", y = "")
 dev.off()
-
-# Export hierarchical partitioning results
-mod_hier_all <- as.data.frame(do.call(cbind, lapply(spamm_list, function(x) {
-  x[[8]]$I.perc[,1]
-  })))
-mod_hier_all$var <- pred_lookup
-mod_hier_all_clean <- mod_hier_all[,c(length(mod_hier_all),seq(length(mod_hier_all) - 1))]
-names(mod_hier_all_clean) <- c("Predictor", resp_lookup)
-
-mod_hier_tab <- xtable(mod_hier_all_clean, 
-  caption = "Proportional independent contribution of each predictor in the maximal model for each phenological metric, according to hierarchical partitioning.")
-align(mod_hier_tab) <- "rrccccc"
-
-fileConn <- file("out/hier_part.tex")
-writeLines(print(mod_hier_tab, include.rownames = FALSE, 
-    sanitize.text.function = function(x) {x}), 
-  fileConn)
-close(fileConn)
 
 # Plot location map
 s1_length_tile <- as.data.frame(
@@ -458,65 +412,4 @@ ggplot() +
   scale_fill_manual(name = "", values = clust_pal) + 
   labs(x = "", y = "")
 dev.off()
-
-# Procrustes
-
-## Create two datasets, climate and phenology
-phen_dat <- dat_std %>%
-  dplyr::select(cluster, start_lag, cum_vi, end_lag, s1_length, 
-    s1_green_rate, s1_senes_rate)
-
-clim_dat <- dat_std %>% 
-  dplyr::select(cluster, map, trmm_start, trmm_end, cum_precip, mat)
-  ##' Need better estimates than MAP and MAT
-
-## Split each dataset by cluster
-phen_split <- split(phen_dat, phen_dat$cluster)
-clim_split <- split(clim_dat, clim_dat$cluster)
-
-## PCA on each dataset
-phen_pca_list <- lapply(phen_split, pca)
-clim_pca_list <- lapply(clim_split, pca)
-
-## Procrustes analysis on ordination axes or two PCAs
-procrustes_list <- lapply(seq(length(phen_pca_list)), procrustes)
-
-## Take PAM (residuals, m^2) from Procrustes 
-
-## PAM as response variable in regression of `lm(PAM ~ richness)`
-
-
-
-# Lag time models
-##' Does the lag time between start/end of rainy season and start/end of growing season vary according to species richness?
-
-library(lme4)
-
-start_mod <- lmer(start_lag ~ richness + (richness | cluster), data = dat_clean)
-
-start_mod_pred <- ggpredict(start_mod, terms = c("richness", "cluster"), type = "re")
-
-ggplot() + 
-  geom_point(data = dat_clean, aes(x = richness, y = start_lag, fill = cluster), 
-    shape = 21, colour = "black") + 
-  geom_line(data = start_mod_pred, aes(x = x, y = predicted, colour = group),
-    size = 2) + 
-  scale_colour_manual(name = "Cluster", values = clust_pal) + 
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
-  theme_panel() + 
-  labs(x = "Speces richness", y = "Season start lag (days)")
-
-end_mod <- lmer(end_lag ~ richness + (richness | cluster), data = dat_clean)
-
-end_mod_pred <- ggpredict(end_mod, terms = c("richness", "cluster"), type = "re")
-
-ggplot() + 
-  geom_line(data = end_mod_pred, aes(x = x, y = predicted, colour = group),
-    size = 2) + 
-  geom_point(data = dat_clean, aes(x = richness, y = end_lag, fill = cluster), 
-    shape = 21, colour = "black") + 
-  scale_colour_manual(name = "Cluster", values = clust_pal) + 
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
-  theme_panel() + 
-  labs(x = "Speces richness", y = "Season end lag (days)")
 
