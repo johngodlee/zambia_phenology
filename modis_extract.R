@@ -17,6 +17,7 @@ source("functions.R")
 
 # Import data
 dat <- readRDS("dat/plots.rds")
+vipphen <- readRDS("dat/vipphen.rds")
 
 # Read .csv files per granule 
 csv_files <- list.files("dat", "evi_h.*_extract.csv", full.names = TRUE)
@@ -210,10 +211,11 @@ phen_df$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
 
 phen_all <- dat %>%
   left_join(., phen_df, by = "plot_cluster") %>%
+  left_join(., vipphen, by = "plot_cluster") %>%
+  filter(vipphen_n_seasons < 2) %>%
+  dplyr::select(-vipphen_n_seasons) %>%
+  filter(!is.na(vipphen_s1_length)) %>%
   filter(!is.na(s1_start))
-
-# Write data 
-saveRDS(phen_all, "dat/plots_phen.rds")
 
 # Make a plot which demonstrates all the different numeric phenology stats
 stat_plot <- function(x, raw = FALSE) {
@@ -278,5 +280,37 @@ ts_example_plot +
     axis.title = element_text(size = 12))
 dev.off()
 
+# Write data 
+saveRDS(phen_all, "dat/plots_phen.rds")
+
+write(
+  commandOutput(slc, "modisSLC"),
+  file="out/vars.tex", append=TRUE)
+
+# Compare VIPPHEN and 250 m
+old_gather <- phen_all %>%
+  st_drop_geometry() %>%
+  dplyr::select(plot_cluster, starts_with("vipphen"), -vipphen_bg_vi) %>%
+  gather(key, old, -plot_cluster) %>%
+  mutate(key = gsub("^vipphen_", "", .$key))
+
+compare <- phen_all %>%
+  st_drop_geometry() %>%
+  dplyr::select(plot_cluster, avg_vi, cum_vi, starts_with("s1")) %>%
+  gather(key, new, -plot_cluster) %>%
+  left_join(., old_gather, by = c("plot_cluster", "key")) %>%
+  filter(!key %in% c("min_vi", "max_vi"), 
+  !(old < 150 & key == "s1_start"))
+
+pdf(file = "img/old_new_compare.pdf", width = 12, height = 8)
+ggplot() + 
+  geom_point(data = compare, aes(x = old, y = new), 
+    alpha = 0.8, colour = "black", fill = pal[5], shape = 21) + 
+  geom_smooth(data = compare, aes(x = old, y = new), 
+    method = "lm", colour = pal[1]) + 
+  facet_wrap(~key, scales = "free") + 
+  theme_panel() + 
+  labs(x = "MODIS VIPPHEN", y = "MOD13Q1")
+dev.off()
 
 

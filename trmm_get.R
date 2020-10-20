@@ -91,7 +91,8 @@ extract_df_clean <- extract_df %>%
     precip = as.numeric(precip))
 
 # Write .csv 
-write.csv(extract_df_clean, file.path(data_dir, "trmm_extract.csv"), row.names = FALSE)
+write.csv(extract_df_clean, file.path(data_dir, "trmm_extract.csv"), 
+  row.names = FALSE)
   
 # Remove .txt files
 file.remove(list.files(out_dir, "*.txt", full.names = TRUE))

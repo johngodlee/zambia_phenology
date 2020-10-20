@@ -40,8 +40,7 @@ div_df <- data.frame(plot_cluster = row.names(ab_mat_clean),
   richness = unname(rowSums(ab_mat_clean != 0)),
   shannon = diversity(ab_mat_clean),
   simpson = diversity(ab_mat_clean, "simpson"),
-  evenness = diversity(ab_mat_clean, "invsimpson") / rowSums(ab_mat_clean > 0))
-
+  evenness = diversity(ab_mat_clean) / log(rowSums(ab_mat_clean > 0)))
 
 # Filter abundance matrix
 # Remove plots with fewer than 5 species with more than 1 individual
@@ -55,7 +54,10 @@ plots_fil <- plots %>%
 
 # Conduct NSCA (Non-symmetric Correspondence Analysis) 
 ##' 4 axes
-nsca <- dudi.nsc(df = ab_mat_fil, scannf = FALSE, nf = 4)
+naxes <- 4
+nsca <- dudi.nsc(df = ab_mat_fil, scannf = FALSE, nf = naxes)
+
+nsca_inertia <- nsca$eig[naxes+1]
 
 ##' p = species
 ##' n = sites
@@ -178,9 +180,14 @@ dev.off()
 
 # What percentage of clusters have a mean pairwise distance lower than the mean across all pairs? 
 plot_dist_mean_clean <- plot_dist_mean[!is.na(plot_dist_mean)]
-plot_dist_per <- length(which(plot_dist_mean_clean < plot_dist_all_mean)) / 
-  length(plot_dist_mean_clean) * 100
+plot_dist_per <- round(length(which(plot_dist_mean_clean < plot_dist_all_mean)) / 
+  length(plot_dist_mean_clean) * 100, 2)
 
-write(commandOutput(plot_dist_per, "plotDistPer"), file="out/vars.tex", 
+write(
+  c(
+    commandOutput(plot_dist_per, "plotDistPer"),
+    commandOutput(nsca_inertia, "nscaInertia")
+    ),
+  file="out/vars.tex", 
   append = TRUE)
 
