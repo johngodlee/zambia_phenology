@@ -17,6 +17,7 @@ library(vegan)
 library(lme4)
 library(purrr)
 library(MuMIn)
+library(ggeffects)
 
 source("functions.R")
 
@@ -27,7 +28,7 @@ dat <- st_as_sf(dat)
 
 phen_stack <- readRDS("dat/vipphen_stack.rds")
 
-af <- st_read("/Volumes/john/africa_countries/africa.shp")
+af <- st_read("/Users/johngodlee/Desktop/africa_countries/africa.shp")
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
 
@@ -40,10 +41,10 @@ names(pred_lookup) <- c("richness", "evenness", "n_stems_gt10_ha", "map",
   "cluster", "diurnal_temp_range")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
-  "Greening rate", "Senescence rate", "Season start", "Season end", 
+  "Greening rate", "Senescence rate",
   "Start lag", "End lag")
 names(resp_lookup) <- c("cum_vi", "s1_length", 
-  "s1_green_rate", "s1_senes_rate", "s1_start", "s1_end", 
+  "s1_green_rate", "s1_senes_rate", 
   "start_lag", "end_lag")
 
 clust_lookup <- c("1", "2", "3", "4")
@@ -136,18 +137,6 @@ bivar_list <- c(
   "s1_senes_rate ~ n_stems_gt10_ha",
   "s1_senes_rate ~ map",
   "s1_senes_rate ~ diurnal_temp_range",
-
-  "s1_start ~ richness",
-  "s1_start ~ evenness",
-  "s1_start ~ n_stems_gt10_ha",
-  "s1_start ~ map",
-  "s1_start ~ diurnal_temp_range",
-
-  "s1_end ~ richness",
-  "s1_end ~ evenness",
-  "s1_end ~ n_stems_gt10_ha",
-  "s1_end ~ map",
-  "s1_end ~ diurnal_temp_range",
 
   "start_lag ~ richness",
   "start_lag ~ evenness",
@@ -303,6 +292,8 @@ modSumm <- function(max_mod, null_mod, pre) {
     # as group indicator, and save axis labels and title in variable
     out$facet <- grp.names[i]
     out$term <- factor(alabels)
+    out$resp <- names(max_mod@frame)[1] 
+
     # create default grouping, depending on the effect:
     # split positive and negative associations with outcome
     # into different groups
@@ -348,13 +339,14 @@ mod_stat_df <- as.data.frame(do.call(rbind, lapply(summ_list, function(x) {
 names(mod_stat_df) <- c("daic", "dbic", "r2m", "r2c", "logl")
 mod_stat_df$resp <- unlist(lapply(summ_list, function(x) {  names(x[[1]]@frame)[1] }))
 mod_stat_df <- mod_stat_df[,c(length(mod_stat_df), seq(length(mod_stat_df) - 1))]
+mod_stat_df$resp <- gsub("_", ".", mod_stat_df$resp)
 mod_stat_tab <- xtable(mod_stat_df, 
   label = "mod_stat",
   align = "rrccccc",
   display = c("s", "s", "f", "f", "f", "f", "f"),
   caption = "Model fit statistics for each phenological metric.")
 
-fileConn <- file("out/spamm_stat.tex")
+fileConn <- file("out/mod_stat.tex")
 writeLines(print(mod_stat_tab, include.rownames = FALSE, 
     sanitize.text.function = function(x) {x}), 
   fileConn)
@@ -374,7 +366,7 @@ mod_eff_df <- do.call(rbind, lapply(summ_list, function(x) {
   filter(!is.na(fixeff)) %>%
   rename(est = Estimate, se = `Std. Error`, tval = `t value`)
 
-pdf(file = "img/mod_spamm_slopes.pdf", width = 12, height = 6)
+pdf(file = "img/mod_slopes.pdf", width = 12, height = 6)
 ggplot() + 
   geom_vline(xintercept = 0, linetype = 2) + 
   geom_errorbarh(data = mod_eff_df, 
@@ -392,6 +384,27 @@ ggplot() +
     panel.spacing = unit(2.5, "lines"),
     legend.position = "none") + 
   labs(x = "Slope", y = "")
+dev.off()
+
+# Export random effects plots
+rand_marg_df <- do.call(rbind, lapply(summ_list, function(i) {
+  preds <- as.data.frame(ggpredict(model = i[[1]], 
+      terms = c("richness", "cluster"), type = "random"))
+  preds$resp <- names(i[[1]]@frame)[1]
+  names(preds) <- c("richness", "pred", "cluster", "resp")
+  return(preds)
+}))
+
+pdf(file = "img/mod_marg.pdf", width = 12, height = 6)
+ggplot() + 
+  geom_line(data = rand_marg_df, 
+    aes(x = richness, y = pred, colour = cluster),
+    size = 1.5) + 
+  facet_wrap(~resp, scales = "free_y", 
+    labeller = labeller(resp = resp_lookup)) +  
+  scale_colour_manual(values = clust_pal) +
+  theme_panel() +
+  labs(x = "Species richness", y = "")
 dev.off()
 
 # Plot location map
@@ -412,4 +425,5 @@ ggplot() +
   scale_fill_manual(name = "", values = clust_pal) + 
   labs(x = "", y = "")
 dev.off()
+
 

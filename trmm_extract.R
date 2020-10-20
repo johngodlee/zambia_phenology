@@ -16,7 +16,7 @@ library(gridExtra)
 source("functions.R")
 
 # Import data
-dat <- readRDS("dat/plots_vipphen.rds")
+dat <- readRDS("dat/plots_phen.rds")
 
 # Read .csv files per granule 
 trmm <- read.csv("dat/trmm_extract.csv")
@@ -161,3 +161,6 @@ dev.off()
 # Write data 
 saveRDS(trmm_df_clean, "dat/plots_trmm.rds")
 
+write(
+  commandOutput(slc, "trmmSLC"),
+  file="out/vars.tex", append=TRUE)

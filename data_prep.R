@@ -74,6 +74,7 @@ stems_fil <- stems %>%
 # Define stem percentage filter parameters
 mopane_per <- 0.5
 stems_ha <- 50
+stem_size <- 10
 
 # Create tree species abundance matrix by plot
 tree_ab_mat_plot <- stems_fil %>% 
@@ -88,7 +89,7 @@ tree_ab_mat_plot <- stems_fil %>%
   mutate_at(vars(-plot_id), as.double) %>%
   as.data.frame() %>%
   dplyr::select(-`Indet indet`) %>%  # Remove stems with no species
-  column_to_rownames("plot_id") 
+  column_to_rownames("plot_id")
 
 # Create tree species abundance matrix by plot cluster
 tree_ab_mat_clust <- stems_fil %>% 
@@ -108,7 +109,8 @@ tree_ab_mat_clust <- stems_fil %>%
   filter(rowSums(.) / 
     (pull(st_drop_geometry(
       plots_fil_sf[plots_fil_sf$plot_cluster %in% row.names(.), "plot_id_length"]
-      )) * 0.1) > stems_ha)  # Remove plots with fewer than x stems ha
+      )) * 0.1) > stems_ha) %>%  # Remove plots with fewer than x stems ha
+  filter((.$`Colophospermum mopane` / rowSums(.)) < mopane_per)  # Filter mopane plots
 
 # Remove plots not in tree abundance matrix
 plots_clean <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat_clust))
@@ -126,6 +128,7 @@ saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 write(
   c(commandOutput(census, "censusDate"),
     commandOutput(stems_ha, "stemsHa"),
+    commandOutput(stem_size, "stemSize"),
     commandOutput(mopane_per*100, "mopanePer"),
     commandOutput(n_total_sites, "nTotalSites")),
   file="out/vars.tex", append=TRUE)
