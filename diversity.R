@@ -57,7 +57,7 @@ plots_fil <- plots %>%
 naxes <- 4
 nsca <- dudi.nsc(df = ab_mat_fil, scannf = FALSE, nf = naxes)
 
-nsca_inertia <- nsca$eig[naxes+1]
+nsca_inertia <- round(nsca$eig[naxes+1], 2)
 
 ##' p = species
 ##' n = sites
@@ -133,7 +133,8 @@ indval_xtable <- xtable(indval_extrac_tidy,
   label = "indval",
   digits = 3,
   align = c("c", "c", "c", "c"),
-  display = c("s", "s", "s", "f"))
+  display = c("s", "s", "s", "f"),
+  caption = "Legendre indicator species analysis for the four vegetation type clusters identified by the PAM algorithm.")
 
 fileConn <- file("out/indval.tex")
 writeLines(print(indval_xtable, include.rownames = FALSE,
@@ -181,7 +182,7 @@ dev.off()
 # What percentage of clusters have a mean pairwise distance lower than the mean across all pairs? 
 plot_dist_mean_clean <- plot_dist_mean[!is.na(plot_dist_mean)]
 plot_dist_per <- round(length(which(plot_dist_mean_clean < plot_dist_all_mean)) / 
-  length(plot_dist_mean_clean) * 100, 2)
+  length(plot_dist_mean_clean) * 100, 1)
 
 write(
   c(

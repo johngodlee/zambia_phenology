@@ -4,9 +4,8 @@
 
 # List packages 
 bibentries <- list(citation(), 
-  citation("ape"), 
-  citation("hier.part"), 
-  citation("spaMM"))
+  citation("ade4"),
+  citation("cluster"))
 
 # Write to file
 fileConn <- file("out/packages.bib")
