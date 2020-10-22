@@ -14,8 +14,7 @@ library(gridExtra)
 library(xtable)
 library(raster)
 library(vegan)
-library(lme4)
-library(purrr)
+library(nlme)
 library(MuMIn)
 library(ggeffects)
 
@@ -100,15 +99,15 @@ dat_clean %>%
   st_drop_geometry() %>%
   as.data.frame() %>%
   gather(variable, value, -cluster) %>%
-  left_join(., data.frame(resp_lookup, raw = names(resp_lookup)), 
-    by = c("variable" = "raw")) %>%
-  dplyr::select(variable = resp_lookup, value, cluster) %>% 
-  mutate(variable = factor(variable, levels = resp_lookup)) %>%
+  dplyr::select(variable, value, cluster) %>% 
+  mutate(variable = factor(variable, 
+      levels = names(resp_lookup)[c(1,3,5,2,4,6)],
+      labels = resp_lookup[c(1,3,5,2,4,6)])) %>%
   ggplot(., aes(x = value, colour = cluster)) + 
   geom_density(size = 1.5) + 
   facet_wrap(~variable, scales = "free") + 
   labs(x = "", y = "") +
-  scale_colour_manual(values = clust_pal) + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) + 
   theme_panel()
 dev.off()
 
@@ -206,119 +205,77 @@ dev.off()
 # Mixed models with cluster random effects ----
 
 # Fit models
-max_mod_c <- lmer(cum_vi ~ richness + evenness + cum_precip_seas + 
-  diurnal_temp_range + (richness|cluster), 
-  data = dat_std)
-null_mod_c <- lmer(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
-  (1|cluster), 
-  data = dat_std)
+max_mod_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
+  evenness + richness + richness:cluster, 
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
+null_mod_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
 
-max_mod_l <- lmer(s1_length ~ richness + evenness + 
-  cum_precip_seas + diurnal_temp_range + (richness|cluster), 
-  data = dat_std)
-null_mod_l <- lmer(s1_length ~ cum_precip_seas + diurnal_temp_range + 
-  (1|cluster), 
-  data = dat_std)
+max_mod_l <- gls(s1_length ~ cum_precip_seas + diurnal_temp_range + 
+  evenness + richness + richness:cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
+null_mod_l <- gls(s1_length ~ cum_precip_seas + diurnal_temp_range + cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
 
-max_mod_r <- lmer(s1_green_rate ~ richness + evenness + cum_precip_pre + 
-  (richness|cluster),
-  data = dat_std)
-null_mod_r <- lmer(s1_green_rate ~ cum_precip_pre + (1|cluster), 
-  data = dat_std)
+max_mod_r <- gls(s1_green_rate ~ cum_precip_pre + 
+  evenness + richness + richness:cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
+null_mod_r <- gls(s1_green_rate ~ cum_precip_pre + cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
 
-max_mod_d <- lmer(s1_senes_rate ~ richness + evenness + cum_precip_seas + 
-  (richness|cluster), 
-  data = dat_std)
-null_mod_d <- lmer(s1_senes_rate ~ cum_precip_seas + 
-  (1|cluster),
-  data = dat_std)
+max_mod_d <- gls(s1_senes_rate ~ cum_precip_seas + 
+  evenness + richness + richness:cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
+null_mod_d <- gls(s1_senes_rate ~ cum_precip_seas + cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
 
-max_mod_s <- lmer(start_lag ~ richness + evenness + 
-  (richness|cluster), data = dat_std)
-null_mod_s <- lmer(start_lag ~ (1|cluster), data = dat_std)
+max_mod_s <- gls(start_lag ~ evenness + richness + richness:cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
+null_mod_s <- gls(start_lag ~ cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
 
-max_mod_e <- lmer(end_lag ~ richness + evenness +
-  (richness|cluster), data = dat_std, na.action = na.omit)
-null_mod_e <- lmer(end_lag ~ (1|cluster), data = dat_std)
+max_mod_e <- gls(end_lag ~ evenness + richness + richness:cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
+null_mod_e <- gls(end_lag ~ cluster,
+  correlation = corGaus(1, form = ~x+y),
+  data = dat_std, na.action = na.omit)
 
 # Define model summary function
-modSumm <- function(max_mod, null_mod, pre) {
+modSumm <- function(max_mod, null_mod) {
 
-  # Predicted values
-  mod_pred <- predict(max_mod)
-  mod_pred_df <- data.frame(cluster = names(mod_pred), pred = as.numeric(unname(mod_pred)))
-
-  # Model summary
-  mod_summ <- summary(max_mod)
-  rsq <- do.call(rbind, lapply(list(max_mod, null_mod), r.squaredGLMM))
+  # Model fit stats
   mod_stat_df <- data.frame(mod = c("max_mod", "null_mod"),
     aic = c(AIC(max_mod, null_mod)[,2]), 
     bic = c(BIC(max_mod, null_mod)[,2]), 
-    r2m = rsq[,1], 
-    r2c = rsq[,2],
-    logl = c(logLik(max_mod)[1], logLik(null_mod)[1]))
-
-  # Random effects
-  rand_ef <- ranef(max_mod)[[1]]
-
-  vars.m <- attr(rand_ef, "postVar")
-  K <- dim(vars.m)[1]
-  J <- dim(vars.m)[3]
-  names.full <- dimnames(rand_ef)
-  rand_se <- array(NA, c(J, K))
-  for (j in 1:J) {
-    rand_se[j, ] <- sqrt(diag(as.matrix(vars.m[, , j])))
-    }
-  dimnames(rand_se) <- list(names.full[[1]], names.full[[2]])
-
-  ci_lvl <- 0.95
-  ci <- 1 - ((1 - ci_lvl) / 2)
-
-  rand_ef <- rownames_to_column(rand_ef)
-  rand_se <- rownames_to_column(as.data.frame(rand_se))
-
-  grp.names <- colnames(rand_ef)
-  alabels <- rand_ef[["rowname"]]
-
-  rand_df <- map_df(2:ncol(rand_ef), function(i) {
-    out <- data.frame(estimate = rand_ef[[i]])
-
-    # Calculate confidence intervals
-    out$conf.low <- rand_ef[[i]] - (stats::qnorm(ci) * rand_se[[i]])
-    out$conf.high <- rand_ef[[i]] + (stats::qnorm(ci) * rand_se[[i]])
-    out$se <- (stats::qnorm(ci) * rand_se[[i]])
-
-    # set column names (variable / coefficient name)
-    # as group indicator, and save axis labels and title in variable
-    out$facet <- grp.names[i]
-    out$term <- factor(alabels)
-    out$resp <- names(max_mod@frame)[1] 
-
-    # create default grouping, depending on the effect:
-    # split positive and negative associations with outcome
-    # into different groups
-    out$group <- dplyr::if_else(out$estimate > 0, "pos", "neg")
-
-    return(out)
-  })
+    rsq = do.call(rbind, lapply(list(max_mod, null_mod), r.squaredLR)),
+    logl = c(logLik(max_mod)[1], logLik(null_mod)[1])
+  )
 
   # Return list of model statistics
   ##' 1. Max mod object
   ##' 2. Null mod object
-  ##' 3. Model predicted values
-  ##' 4. Model summary 
-  ##' 5. Model fit statistics
-  ##' 6. Effect sizes for each random effect
-  return(list(max_mod, null_mod, mod_pred, mod_summ, mod_stat_df, rand_df))
+  ##' 3. Model fit statistics
+  return(list(max_mod, null_mod, mod_stat_df))
 }
 
 # Summarise models
-summ_c <- modSumm(max_mod_c, null_mod_c, "c")
-summ_l <- modSumm(max_mod_l, null_mod_l, "l")
-summ_r <- modSumm(max_mod_r, null_mod_r, "r")
-summ_d <- modSumm(max_mod_d, null_mod_d, "d")
-summ_s <- modSumm(max_mod_s, null_mod_s, "s")
-summ_e <- modSumm(max_mod_e, null_mod_e, "e")
+summ_c <- modSumm(max_mod_c, null_mod_c)
+summ_l <- modSumm(max_mod_l, null_mod_l)
+summ_r <- modSumm(max_mod_r, null_mod_r)
+summ_d <- modSumm(max_mod_d, null_mod_d)
+summ_s <- modSumm(max_mod_s, null_mod_s)
+summ_e <- modSumm(max_mod_e, null_mod_e)
 
 summ_list <- list(summ_c, summ_l, summ_r, summ_d, summ_s, summ_e)
 
@@ -328,23 +285,25 @@ summ_list <- readRDS("dat/summ_list.rds")
 # Export model statistics table
 mod_stat_df <- as.data.frame(do.call(rbind, lapply(summ_list, function(x) {
       ##' If positive, max mod better
-      daic <- x[[5]][2,2] - x[[5]][1,2]
-      dbic <- x[[5]][2,3] - x[[5]][1,3]
-      r2m <- x[[5]][1,4]
-      r2c <- x[[5]][1,5]
-      logl <- x[[5]][1,6]
+      daic <- x[[3]][2,2] - x[[3]][1,2]
+      dbic <- x[[3]][2,3] - x[[3]][1,3]
+      rsq <- x[[3]][1,4]
+      dlogl <- x[[3]][2,5] - x[[3]][1,5]
 
-  unlist(c(daic, dbic, r2m, r2c, logl))
+  unlist(c(daic, dbic, rsq, dlogl))
 }))) 
-names(mod_stat_df) <- c("daic", "dbic", "r2m", "r2c", "logl")
-mod_stat_df$resp <- unlist(lapply(summ_list, function(x) {  names(x[[1]]@frame)[1] }))
+names(mod_stat_df) <- c("daic", "dbic", "rsq", "dlogl")
+mod_stat_df$resp <- unlist(lapply(summ_list, function(x) {gsub("\\s~.*", "", x[[1]]$call[[2]])[2]}))
 mod_stat_df <- mod_stat_df[,c(length(mod_stat_df), seq(length(mod_stat_df) - 1))]
-mod_stat_df$resp <- gsub("_", ".", mod_stat_df$resp)
+mod_stat_df$resp <- factor(mod_stat_df$resp, levels = names(resp_lookup), 
+  labels = resp_lookup)
 mod_stat_tab <- xtable(mod_stat_df, 
   label = "mod_stat",
-  align = "rrccccc",
-  display = c("s", "s", "f", "f", "f", "f", "f"),
+  align = "rrcccc",
+  display = c("s", "s", "f", "f", "f", "f"),
+  digits = c(0, 0, 1, 1, 2, 2),
   caption = "Model fit statistics for each phenological metric.")
+names(mod_stat_tab) <- c("Response", "$\\delta$AIC", "$\\delta$BIC", "R\\textsuperscript{2}\\textsubscript{adj}", "$\\delta$logLik")
 
 fileConn <- file("out/mod_stat.tex")
 writeLines(print(mod_stat_tab, include.rownames = FALSE, 
@@ -352,57 +311,64 @@ writeLines(print(mod_stat_tab, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-# Export model slopes plot
-mod_eff_df <- do.call(rbind, lapply(summ_list, function(x) {
-  resp <- names(x[[1]]@frame)[1] 
-  out <- as.data.frame(x[[4]]$coefficients)
-  out$resp <- resp
-  out <- rownames_to_column(out, "fixeff")
-  out[,c(5,1,2,3,4)]
-})) %>%
-  mutate(resp = factor(resp, levels = names(resp_lookup)),
-    fixeff = factor(fixeff, levels = rev(names(pred_lookup)), labels = rev(pred_lookup)),
-    pos_neg = if_else(Estimate >= 0, "pos", "neg")) %>%
-  filter(!is.na(fixeff)) %>%
-  rename(est = Estimate, se = `Std. Error`, tval = `t value`)
+# Model slope plots
+mod_slope_df <- do.call(rbind, lapply(summ_list, function(x) {
+  mod_pred <- get_model_data(x[[1]], type = "est")
 
-pdf(file = "img/mod_slopes.pdf", width = 12, height = 6)
-ggplot() + 
-  geom_vline(xintercept = 0, linetype = 2) + 
-  geom_errorbarh(data = mod_eff_df, 
-    aes(xmin = est - se, xmax = est + se, y = fixeff, colour = pos_neg), 
-    height = 0.1) + 
-  geom_point(data = mod_eff_df, 
-    aes(x = est, y = fixeff, fill = pos_neg), 
+  mod_pred_fil <- mod_pred %>%
+    filter(!grepl("richness:cluster", term)) %>%
+    mutate(resp = gsub("\\s~.*", "", x[[1]]$call[[2]])[2]) %>%
+    dplyr::select(1:8, group, resp)
+
+  return(mod_pred_fil)
+  })) %>%
+  mutate(term = factor(term, levels = rev(names(pred_lookup)), labels = rev(pred_lookup)),
+    resp = factor(resp, 
+      levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
+      labels = resp_lookup[c(1,3,5,2,4,6)]))
+
+pdf(file = "img/mod_slopes.pdf", width = 10, height = 5)
+ggplot() +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_errorbarh(data = mod_slope_df, 
+    aes(xmin = conf.low, xmax = conf.high, y = term, colour = group),
+    height = 0) + 
+  geom_point(data = mod_slope_df,
+    aes(x = estimate, y = term, fill = group),
     shape = 21, colour = "black") + 
-  scale_colour_manual(values = pal[3:4]) + 
-  scale_fill_manual(values = pal[3:4]) + 
-  facet_wrap(~resp, scales = "free_x", nrow = 2,
-    labeller = labeller(resp = resp_lookup)) +  
+  facet_wrap(~resp, scales = "free_x") + 
+  scale_fill_manual(name = "", values = pal[3:4]) +
+  scale_colour_manual(name = "", values = pal[3:4]) +
   theme_panel() + 
-  theme(panel.grid.major.y = element_line(colour = pal[6]),
-    panel.spacing = unit(2.5, "lines"),
-    legend.position = "none") + 
-  labs(x = "Slope", y = "")
+  theme(legend.position = "none") + 
+  labs(x = "Estimate", y = "")
 dev.off()
 
-# Export random effects plots
+# Export interaction effect on richness plots
 rand_marg_df <- do.call(rbind, lapply(summ_list, function(i) {
-  preds <- as.data.frame(ggpredict(model = i[[1]], 
-      terms = c("richness", "cluster"), type = "random"))
-  preds$resp <- names(i[[1]]@frame)[1]
-  names(preds) <- c("richness", "pred", "cluster", "resp")
+  preds <- as.data.frame(ggemmeans(model = i[[1]], 
+      terms = c("richness", "cluster")))
+  preds$resp <- gsub("\\s~.*", "", i[[1]]$call[[2]])[2]  
+  names(preds) <- c("richness", "pred", "se", "conf_lo", "conf_hi", "cluster", "resp")
   return(preds)
 }))
+rand_marg_df$resp <- factor(rand_marg_df$resp, 
+      levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
+      labels = resp_lookup[c(1,3,5,2,4,6)])
 
 pdf(file = "img/mod_marg.pdf", width = 12, height = 6)
 ggplot() + 
+  geom_ribbon(data = rand_marg_df, 
+    aes(x = richness, ymin = conf_lo, ymax = conf_hi, colour = cluster), 
+    linetype = 2, alpha = 0.2, fill = NA) + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) +
+  new_scale_colour() + 
   geom_line(data = rand_marg_df, 
     aes(x = richness, y = pred, colour = cluster),
     size = 1.5) + 
-  facet_wrap(~resp, scales = "free_y", 
-    labeller = labeller(resp = resp_lookup)) +  
-  scale_colour_manual(values = clust_pal) +
+  scale_colour_manual(name = "Cluster", 
+    values = brightness(clust_pal, 0.75)) +
+  facet_wrap(~resp, scales = "free_y") + 
   theme_panel() +
   labs(x = "Species richness", y = "")
 dev.off()
@@ -425,5 +391,4 @@ ggplot() +
   scale_fill_manual(name = "", values = clust_pal) + 
   labs(x = "", y = "")
 dev.off()
-
 
