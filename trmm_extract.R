@@ -120,6 +120,13 @@ trmm_df$cum_precip_pre <- unlist(lapply(seq(length(gam_list)), function(x) {
   sum(mod[mod$doy <= season_start & mod$doy >= (season_start - 90), "pred"])
 }))
 
+# Cumulative precipitation in dry season before end of season (end season -90 days)
+trmm_df$cum_precip_end <- unlist(lapply(seq(length(gam_list)), function(x) {
+  mod <- gam_list[[x]][[2]]
+  season_end <- trmm_df[x, "trmm_end"]
+  sum(mod[mod$doy <= season_end & mod$doy >= (season_end - 90), "pred"])
+}))
+
 trmm_df_clean <- trmm_df %>%
   left_join(., dat, by = "plot_cluster") %>%
   filter(!is.na(trmm_start))
