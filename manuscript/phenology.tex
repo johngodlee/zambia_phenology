@@ -13,6 +13,7 @@
 
 % Set font
 \usepackage[T1]{fontenc}
+\usepackage{amssymb}
 
 % Image handling
 \usepackage{graphics}  % Insert images easily
@@ -72,13 +73,12 @@
 % \usepackage{biblatex}
 
 \usepackage{lineno}
-\linenumbers
 
 \input{include/vars}
 
 \begin{document}
 
-{Title: Phenology and diversity in Zambia}
+{\Large{Title: Phenology and diversity in Zambia}}
 
 Authors: Godlee, J. L.\textsuperscript{1}, 
 
@@ -100,6 +100,7 @@ School of GeoSciences, University of Edinburgh, Edinburgh, United Kingdom
 \section*{Data accessibility statement}
 
 \newpage{}
+\linenumbers
 
 %{\LARGE{\textbf{Blinded Main Text File}}}
 
@@ -160,11 +161,11 @@ Precipitation data was gathered using the ``GPM IMERG Final Precipitation L3 1 d
 
 To quantify variation in tree species composition we used a Non-Symmetric Correspondence Analysis (NSCA), based on tree species abundance per site, with four axes (Inertia = \nscaInertia{}), using the \texttt{ade4} R package \citep{ade4}. The first 4 axes of the NSCA explained nscaPer{} of the variation in species composition among sites according to eigenvalue analysis. We performed clustering on the NSCA axes, using the PAM (Partitioning Around Medoids) algorithm available in the \texttt{cluster} R package \citep{cluster}. We identified four compositional groups based on this analysis which were used as random effects in statistical models. \todo{More technical detail on NSCA procedure}
 
-We specified multivariate linear models to assess the role of tree species diversity on each of the chosen phenological metrics. We defined tree species diversity using both species richness and abundance evenness. Abundance evenness was calculated as the Shannon Equitability index ($E_{H'}$) \citep{Smith1996} was calculated as the ratio of the Shannon diversity index to the natural log of species richness. We defined a maximal model structure including tree species richness, abundance evenness, the interaction of species richness and vegetation type, and climatic variables shown by previous studies to strongly influence phenology. The maximal model was compared to models with different subsets of independent variables using the model log likelihood, AIC (Akaike Information Criteria), BIC (Bayesian Information Criteria), and adjusted R\textsuperscript{2} values for each model. For each phenological metric, the best model according to the model quality statistics is reported in the results. All models were fitted using Maximum Likelihood to allow comparison of models \citep{}. Independent variables in each model were transformed to achieve normality where necessary and standardised to Z-scores prior to modelling. All statistical analyses were conducted in R version 4.0.2 \citep{R2020}.
+We specified multivariate linear models to assess the role of tree species diversity on each of the chosen phenological metrics. We defined tree species diversity using both species richness and abundance evenness as separate independent variables. Abundance evenness was calculated as the Shannon Equitability index ($E_{H'}$) \citep{Smith1996} was calculated as the ratio of the Shannon diversity index to the natural log of species richness. We defined a maximal model structure including tree species richness, abundance evenness, the interaction of species richness and vegetation type, and climatic variables shown by previous studies to strongly influence phenology. The quality of the maximal model was compared to models with different subsets of independent variables using the model log likelihood, AIC (Akaike Information Criteria), BIC (Bayesian Information Criteria), and adjusted R\textsuperscript{2} values for each model. For each phenological metric, the best model according to the model quality statistics is reported in the results. All models were fitted using Maximum Likelihood to allow comparison of models \citep{}. Independent variables in each model were transformed to achieve normality where necessary and standardised to Z-scores prior to modelling to allow comparison of slope coefficients within a given model. All statistical analyses were conducted in R version 4.0.2 \citep{R2020}.
 
 \section{Results}
 
-All the best models for each phenological metric included richness and evenness in their fixed effects \autoref{mod_slopes}. Models predicting rainy season - growing season lags included only species and richness. 
+Model selection showed that richness and evenness are important determinants of each phenological metric, across vegetation types \autoref{mod_slopes}. Models predicting rainy season - growing season lags included only species and richness. It is striking that in models for green-up lag and season length, species richness and evenness had contrasting effects on these phenological metrics. Species richness increased the green-up lag time and increased season length, while evenness had the opposite effect.
 
 Against expectations, tree species richness and evenness had negative effects on cumulative EVI, while wet season precipitation had a positive effect and diurnal temperature range had a negative effect, as expected. Despite this, species richness had a positive effect on season length.
 
@@ -183,7 +184,7 @@ The slope of the relationship between species richness and phenological metrics 
 \begin{figure}[H]
 \centering
 	\includegraphics[width=\textwidth]{mod_slopes.pdf}
-	\caption{Predictor slope estimates for each maximal model of a phenological metric. Slope estimates are $\pm$1 standard error. Slope estimates where the interval (standard error) does not overlap zero are considered to be significant effects.}
+	\caption{Standardized slope coefficients for each best model of a phenological metric. Slope estimates are $\pm$1 standard error. Slope estimates where the interval (standard error) does not overlap zero are considered to be significant effects.}
 	\label{mod_slopes}
 \end{figure}
 
@@ -215,6 +216,15 @@ The ability for us now nearing to be able to remotely sense tree species diversi
 \section{Conclusion}
 
 \printbibliography
+
+\section{Supplementary material}
+
+\input{include/mod_sel_cum_vi.tex}
+\input{include/mod_sel_s1_length.tex}
+\input{include/mod_sel_s1_green_rate.tex}
+\input{include/mod_sel_s1_senes_rate.tex}
+\input{include/mod_sel_start_lag.tex}
+\input{include/mod_sel_end_lag.tex}
 
 \end{document}
 
