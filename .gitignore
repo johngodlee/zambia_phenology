@@ -1,7 +1,7 @@
 .DS_Store
-img/**
+dat/evi_tif/**
+dat/trmm_tif/**
 old/**
-out/**
 reading/**
 comments/**
 
