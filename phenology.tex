@@ -11,49 +11,31 @@
 \usepackage{pdflscape}
 \usepackage[document]{ragged2e}
 
+% Text formatting
+\usepackage[T1]{fontenc}  % Set font
 
-% Set font
-\usepackage[T1]{fontenc}
-\usepackage{amssymb}
+\usepackage{lineno}  % Line numbers
+
+\usepackage{amssymb}  % Symbols
+
+\linespread{1.25}  % Linespacing
 
 % Image handling
-\usepackage{graphics}  % Insert images easily
-\usepackage{graphicx}  % Extended image support
+\usepackage{graphicx} 
 
 \makeatletter
 	\g@addto@macro\@floatboxreset\centering  % Automatically centre images (floats)
 \makeatother
 
-\graphicspath{ {img/} }
-\usepackage{float}  %  Graphics placement [H] [H!] arguments
-\usepackage{subfig}  % Compound figures
+\graphicspath{ {img/} }  % Define image path
 
-% Tables
-\usepackage{multirow}
-\usepackage{longtable}
+\usepackage{subfig}  % Compound figures
 
 % Bibliography management
 \usepackage[style=authoryear, natbib=true, backend=biber]{biblatex}
 \addbibresource{phenology.bib}
 
-% Text formatting
-\usepackage{url} % Allow nice formatting of URLs in text
-
-\usepackage{enumerate}  % Enumerated lists
-
-\usepackage{lineno}  % Line numbers
-
-\usepackage{textcomp}
-\newcommand{\textapprox}{\raisebox{0.5ex}{\texttildelow}}  % Command for a good tilde
-
-\usepackage{siunitx}
-\usepackage{amsmath}
-
-\linespread{1.25}
-
-\usepackage{xcolor}
-\newcommand{\todo}[1]{\textcolor{red}{\textbf{#1}}}   % \todo{NOTE TO SELF WRITTEN IN RED}
-
+% Links within document, nice figure formatting
 \usepackage[breaklinks]{hyperref}
 \definecolor{links}{RGB}{0,0,0}
 \hypersetup{
@@ -70,11 +52,10 @@
 }
 \def\subsectionautorefname{section}
 \def\subsubsectionautorefname{section}
-% \usepackage{biblatex}
 
-\usepackage{lineno}
-
+% Variables
 \input{out/vars.tex}
+
 
 \begin{document}
 
@@ -130,14 +111,14 @@ In this study we contend that, across Zambian deciduous savannas, tree species d
 
 We used plot-level data on tree species diversity across \nSites{} sites from the Zambian Integrated Land Use Assessment Phase II (ILUA-II), conducted in \censusDate{} \citep{Mukosha2009, Pelletier2018}. Each site consisted of four 20x50 m (0.2 ha) plots positioned in a square around a central point, with a distance of 500 m between each plot (\autoref{schematic}). The original census contained \nTotalSites{} sites, which was filtered in order to define study bounds and to ensure data quality. Only sites with $\geq$\stemsHa{} stems ha\textsuperscript{-1} $\geq$\stemSize{} cm DBH (Diameter at Breast Height) were included in the analysis, to ensure all sites represented woody savanna rather than `grassy savanna', which is considered a separate biome with very different species composition and ecosystem processes governing phenology \citep{Parr2014}. Sites in Mopane woodland were removed by filtering sites with greater than \mopanePer{}\% of individuals belonging to \textit{Colophospermum mopane}, preserving only plots with Zambesian tree savanna / woodland. To eliminate compositional outliers, plots with fewer than five species with more than one individual were excluded. Plots dominated by  non-native tree species ($\geq$50\% of individuals), e.g. \textit{Pinus} spp. and \textit{Eucalyptus} spp. were also excluded, as these species may exhibit non-seasonal patterns of leaf production \citep{}.
 
-\begin{figure}[H]
+\begin{figure}[h]
 \centering
 	\includegraphics[width=0.8\textwidth]{plot_loc}
 	\caption{Distribution of study sites within Zambia as triangles, each consisting of four plots. Sites are oloured according to vegetation compositional cluster as identifed by the PAM clustering algorithm on NSCA ordination axes of species abundance data. Zambia is shaded according to growing season length as estimated by the MODIS VIPPHEN-EVI2 product, at 0.05 degrees spatial resolution \citep{VIPPHEN}.}
 	\label{plot_loc}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[h]
 \centering
 	\includegraphics[width=0.5\textwidth]{schematic}
 	\caption{Schematic diagram of plot layout within a site. Each 20x50 m (0.2 ha) plot is shaded grey. The site centre is denoted by a circle. Note that the plot dimensions are not to scale.}
@@ -150,7 +131,7 @@ To quantify phenology at each site, we used the MODIS MOD13Q1 satellite data pro
 
 Precipitation data was gathered using the ``GPM IMERG Final Precipitation L3 1 day V06'' dataset, which has a pixel size of 0.1\textdegree (11.1 km at the equator) \citep{GPM}, between 2015 and 2020. Daily total precipitation was separated into two periods: precipitation during the growing season (growing season precipitation), and precipitation in the 90 day period before the onset of the growing season (dry season precipitation). Similar to estimation of the growing season, the rainy season was defined using the first derivative of a GAM to create a curve for each site using stacked yearly precipitation data. The slope coefficient used to identify the start and end of the rainy season was \trmmSLC{}. Mean diurnal temperature range (Diurnal $\delta$T) was calculated as the mean of monthly temperature range from the WorldClim database, using the BioClim variables, with a pixel size of 30 arc seconds (926 m at the equator) \citep{Fick2017}. averaged across all years of available data (1970-2000).
 
-\begin{figure}[H]
+\begin{figure}[h]
 \centering
 	\includegraphics[width=0.8\textwidth]{ts_example}
 	\caption{Example EVI time series, demonstrating the metrics derived from it. Thin black lines show the raw EVI time series, with one line for each annual growth season. The thick black line shows the GAM fit. The thin blue lines show the minima which bound the growing season. The red line shows the maximum EVI value reached within the growing season. The shaded cyan area of the GAM fit shows the growing season, as defined by the first derivative of the GAM curve. The two orange dashed lines are linear regressions predicting the greening rate and senescence rate at the start and end of the growing season, respectively. Note that while the raw EVI time series fluctuate greatly around the middle of the growing season, mostly due to cloud cover, the GAM fit effectively smooths this variation to estimate the average EVI during the mid-season period.}
@@ -181,28 +162,28 @@ The slope of the relationship between species richness and phenological metrics 
 
 \input{out/mod_stat.tex} 
 
-\begin{figure}[H]
+\begin{figure}[h]
 \centering
 	\includegraphics[width=\textwidth]{mod_slopes.pdf}
 	\caption{Standardized slope coefficients for each best model of a phenological metric. Slope estimates are $\pm$1 standard error. Slope estimates where the interval (standard error) does not overlap zero are considered to be significant effects.}
 	\label{mod_slopes}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[h]
 \centering
 	\includegraphics[width=\textwidth]{mod_marg.pdf}
 	\caption{Marginal effects of tree species richness on each of the phenological metrics, for each vegetation type, using the best model for each phenological metric.}
 	\label{mod_marg}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[h]
 \centering
 	\includegraphics[width=\textwidth]{nsca.pdf}
 	\caption{Plot scores of the (A) first and second, and (B) third and fourth axes of the Non-Symmetric Correspondence Analysis of tree species composition. Points are coloured according to clusters defined by the PAM algorithm on the NSCA ordination axes, along with a convex hull encompassing 95\% of the points in each cluster.}
 	\label{nsca}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[h]
 \centering
 	\includegraphics[width=\textwidth]{phen_dens_clust}
 	\caption{}
