@@ -1,5 +1,6 @@
 .DS_Store
-dat/**
+dat/evi_tif/**
+dat/trmm_tif/**
 img/**
 old/**
 out/**
