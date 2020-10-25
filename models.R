@@ -188,6 +188,7 @@ names(mod_stat_tab) <- c("Response", "$\\delta$AIC", "$\\delta$BIC", "R\\textsup
 
 fileConn <- file("out/mod_stat.tex")
 writeLines(print(mod_stat_tab, include.rownames = FALSE, 
+    table.placement = "h",
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)

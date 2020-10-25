@@ -193,6 +193,7 @@ indval_xtable <- xtable(indval_extrac_tidy,
 
 fileConn <- file("out/indval.tex")
 writeLines(print(indval_xtable, include.rownames = FALSE,
+    table.placement = "h",
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)
