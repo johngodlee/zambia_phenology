@@ -9,12 +9,10 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-source("functions.R")
-
 # Import data
 plots <- readRDS("dat/plots.rds")
 
-af <- st_read("/Volumes/john/africa_countries/africa.shp")
+af <- st_read("~/Desktop/africa_countries/africa.shp")
 
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
@@ -28,7 +26,7 @@ plots_bbox <- st_as_sfc(st_bbox(plots_extent)) %>%
   `st_crs<-`(4326)
 
 # List of vipphen layers
-vipphen_file_list <- list.files(path = "/Volumes/john/modis_vipphen", 
+vipphen_file_list <- list.files(path = "/Volumes/UNTITLED/modis_vipphen", 
   pattern = ".*tif$", full.names = TRUE)
 
 # Split by variable

@@ -18,25 +18,7 @@ source("functions.R")
 # Import data
 dat <- readRDS("dat/plots.rds")
 vipphen <- readRDS("dat/vipphen.rds")
-
-# Read .csv files per granule 
-csv_files <- list.files("dat", "evi_h.*_extract.csv", full.names = TRUE)
-csv_list <- lapply(csv_files, read.csv)
-
-# Check that no plots have been included in both granules 
-any(
-  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[2]]$plot_cluster)),
-  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
-  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
-  intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
-  intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
-  intersect(unique(csv_list[[3]]$plot_cluster), unique(csv_list[[4]]$plot_cluster))
-  )
-
-# Join csv files
-evi_ts_df <- do.call(rbind, csv_list)
-evi_ts_df$date <- unlist(lapply(evi_ts_df$date, as.Date, 
-    tryFormats = c("%Y-%m-%d", "%d/%m/%Y")))
+evi_ts_df <- readRDS("dat/evi.rds")
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 evi_ts_list <- split(evi_ts_df, evi_ts_df$plot_cluster)
@@ -129,6 +111,7 @@ phen_df$avg_vi <- unlist(lapply(gam_fil, function(x) {mean(x[["pred"]])}))
 
 # Greening rate (s1_green_rate)
 ##' First +5 to second +5
+
 s1_greenup_mod_list <- lapply(seq(length(gam_list)), function(x) {
   mod <- gam_list[[x]][[1]]
   pred <- gam_list[[x]][[2]]
@@ -150,7 +133,11 @@ s1_greenup_mod_list <- lapply(seq(length(gam_list)), function(x) {
   pred_green <- pred[pred$doy >= doy_green_start & pred$doy <= doy_green_end,]
 
   # Linear model
-  mod_green <- lm(pred ~ doy, data = pred_green)
+  if (all(is.na(pred_green$pred))) {
+    mod_green <- NA
+  } else {
+    mod_green <- lm(pred ~ doy, data = pred_green)
+  }
 
   # Extract slope
   if (is.atomic(mod_green)) {
@@ -187,7 +174,11 @@ s1_senes_mod_list <- lapply(seq(length(gam_list)), function(x) {
   pred_senes <- pred[pred$doy >= doy_senes_start & pred$doy <= doy_senes_end,]
 
   # Linear model
-  mod_senes <- lm(pred ~ doy, data = pred_senes)
+  if (all(is.na(pred_senes$pred))) {
+    mod_senes <- NA
+  } else {
+    mod_senes <- lm(pred ~ doy, data = pred_senes)
+  }
 
   # Extract slope
   if (is.atomic(mod_senes)) {
@@ -285,7 +276,7 @@ saveRDS(phen_all, "dat/plots_phen.rds")
 
 write(
   commandOutput(slc, "modisSLC"),
-  file="out/vars.tex", append=TRUE)
+  file = "out/modis_extract_vars.tex")
 
 # Compare VIPPHEN and 250 m
 old_gather <- phen_all %>%

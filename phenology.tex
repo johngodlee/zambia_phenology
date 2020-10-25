@@ -11,6 +11,7 @@
 \usepackage{pdflscape}
 \usepackage[document]{ragged2e}
 
+
 % Set font
 \usepackage[T1]{fontenc}
 \usepackage{amssymb}
@@ -34,7 +35,6 @@
 % Bibliography management
 \usepackage[style=authoryear, natbib=true, backend=biber]{biblatex}
 \addbibresource{phenology.bib}
-\addbibresource{include/packages.bib}
 
 % Text formatting
 \usepackage{url} % Allow nice formatting of URLs in text
@@ -74,7 +74,7 @@
 
 \usepackage{lineno}
 
-\input{include/vars}
+\input{out/vars.tex}
 
 \begin{document}
 
@@ -139,7 +139,7 @@ We used plot-level data on tree species diversity across \nSites{} sites from th
 
 \begin{figure}[H]
 \centering
-	\includegraphics[width=0.5\textwidth]{schematic.drawio}
+	\includegraphics[width=0.5\textwidth]{schematic}
 	\caption{Schematic diagram of plot layout within a site. Each 20x50 m (0.2 ha) plot is shaded grey. The site centre is denoted by a circle. Note that the plot dimensions are not to scale.}
 	\label{schematic}
 \end{figure}
@@ -177,9 +177,9 @@ For all phenological metrics, models including species richness and evenness wer
 
 The slope of the relationship between species richness and phenological metrics varied among vegetation types, but largely maintained the same direction. Only in greening rate, senescencerate, and season length did vegetation types have differing slope estimates.
 
-\input{include/indval.tex}
+\input{out/indval.tex}
 
-\input{include/mod_stat.tex} 
+\input{out/mod_stat.tex} 
 
 \begin{figure}[H]
 \centering
@@ -219,13 +219,7 @@ The ability for us now nearing to be able to remotely sense tree species diversi
 
 \section{Supplementary material}
 
-\input{include/mod_sel_cum_vi.tex}
-\input{include/mod_sel_s1_length.tex}
-\input{include/mod_sel_s1_green_rate.tex}
-\input{include/mod_sel_s1_senes_rate.tex}
-\input{include/mod_sel_start_lag.tex}
-\input{include/mod_sel_end_lag.tex}
+\input{out/all_mod_sel.tex}
 
 \end{document}
-
 

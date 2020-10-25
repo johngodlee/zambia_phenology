@@ -13,8 +13,6 @@ library(stringr)
 library(readr)
 library(tidyr)
 
-source("functions.R")
-
 # Import plot data
 dat <- readRDS("dat/plots.rds")
 
@@ -91,13 +89,13 @@ extract_df_clean <- extract_df %>%
     precip = as.numeric(precip))
 
 # Write .csv 
-write.csv(extract_df_clean, file.path(data_dir, "trmm_extract.csv"), 
-  row.names = FALSE)
+saveRDS(extract_df_clean, file.path(data_dir, "trmm.rds"))
   
 # Remove .txt files
 file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
 
 # Remove .tif files
 file.remove(file.path(out_dir, out_names))
+
 
 
