@@ -11,7 +11,7 @@ library(tibble)
 source("functions.R")
 
 # Import data
-plots <- read.csv("~/git_proj/seosaw_data/data_out/plots_v2.7.csv")
+plots <- read.csv("dat/plots_v2.7.csv")
 
 # Subset plots and data fields - Zambia ILUAii data only
 plots_fil_sf <- plots %>% 

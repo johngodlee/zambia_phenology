@@ -8,22 +8,13 @@ DATDIR   = ./dat
 
 # Include .pdf here to ensure it is always built
 # latexmk always run, make cannot easily track dependencies in .aux, .bib etc.
-.PHONY : $(TEXFILE).pdf all clean get
+.PHONY : $(TEXFILE).pdf all clean get ts
 
 # Depends on final PDF, which starts dependency chain
 all : $(TEXFILE).pdf 
 
 # R scripts
-$(DATDIR)/plots.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex : data_prep.R 
-	Rscript $<
-
-#$(DATDIR)/evi.rds : modis_get.R $(DATDIR)/plots.rds
-#	Rscript $<
-#
-#$(DATDIR)/trmm.rds : trmm_get.R $(DATDIR)/plots.rds
-#	Rscript $<
-
-$(DATDIR)/vipphen.rds $(DATDIR)/vipphen_stack.rds : vipphen.R $(DATDIR)/plots.rds
+$(DATDIR)/plots.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex : data_prep.R $(DATDIR)/plots_v2.7.csv
 	Rscript $<
 
 $(IMGDIR)/ts_example.pdf $(DATDIR)/plots_phen.rds $(OUTDIR)/modis_extract_vars.tex : modis_extract.R functions.R $(DATDIR)/plots.rds $(DATDIR)/vipphen.rds $(DATDIR)/evi.rds
@@ -32,7 +23,7 @@ $(IMGDIR)/ts_example.pdf $(DATDIR)/plots_phen.rds $(OUTDIR)/modis_extract_vars.t
 $(DATDIR)/plots_trmm.rds $(OUTDIR)/trmm_extract_vars.tex : trmm_extract.R functions.R $(DATDIR)/plots_phen.rds $(DATDIR)/trmm.rds
 	Rscript $<
 
-$(DATDIR)/plots_div.rds $(IMGDIR)/nsca.pdf $(OUTDIR)/indval.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_trmm.rds $(DATDIR)/plot_id_lookup.rds
+$(DATDIR)/plots_div.rds $(IMGDIR)/nsca.pdf $(OUTDIR)/indval.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_trmm.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/stems_latest_v2.7.csv
 	Rscript $<
 
 $(DATDIR)/plots_anal.rds $(OUTDIR)/analysis_vars.tex $(IMGDIR)/phen_dens_clust.pdf $(IMGDIR)/plot_loc.pdf : analysis.R functions.R $(DATDIR)/plots_div.rds $(DATDIR)/vipphen_stack.rds 
@@ -49,6 +40,9 @@ $(OUTDIR)/vars.tex : $(OUTDIR)/data_prep_vars.tex $(OUTDIR)/modis_extract_vars.t
 $(IMGDIR)/schematic.pdf : drawio/schematic.drawio
 	./drawio_export.sh $< $@
 
+$(OUTDIR)/indval_fmt.tex : $(OUTDIR)/indval.tex
+	./indval_fmt.sh $< $@
+
 # Compile main tex file and show errors
 $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(OUTDIR)/vars.tex\
@@ -59,7 +53,8 @@ $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(IMGDIR)/nsca.pdf\
 	$(IMGDIR)/schematic.pdf\
 	$(IMGDIR)/phen_dens_clust.pdf\
-	$(OUTDIR)/all_mod_sel.tex
+	$(OUTDIR)/all_mod_sel.tex\
+	$(OUTDIR)/indval_fmt.tex
 	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make -bibtex $<
 
 # Only run time series data getting
@@ -70,4 +65,10 @@ get :
 # Clean up stray intermediary files
 clean :
 	latexmk -C
+
+# Re-create time series
+ts : 
+	Rscript modis_get.R
+	Rscript trmm_get.R
+	Rscript vipphen.R
 

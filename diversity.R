@@ -22,7 +22,7 @@ library(tidyr)
 source("functions.R")
 
 # Import data
-stems <- read.csv("~/git_proj/seosaw_data/data_out/stems_latest_v2.7.csv")
+stems <- read.csv("dat/stems_latest_v2.7.csv")
 
 plots <- readRDS("dat/plots_trmm.rds") 
 plots <- st_as_sf(plots)
@@ -184,6 +184,9 @@ indval_extrac_tidy <- do.call(rbind, lapply(indval_extrac, function(x) {
 )
 
 # Export indval table
+
+indval_extrac_tidy$Species <- paste0("\\textit{", indval_extrac_tidy$Species, "}")
+
 indval_xtable <- xtable(indval_extrac_tidy, 
   label = "indval",
   digits = 3,
@@ -194,6 +197,7 @@ indval_xtable <- xtable(indval_extrac_tidy,
 fileConn <- file("out/indval.tex")
 writeLines(print(indval_xtable, include.rownames = FALSE,
     table.placement = "h",
+    hline.after = c(-1,0,3,6,9,12),
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)
