@@ -1,3 +1,22 @@
+# Define variable name lookup
+pred_lookup <- c("Richness", "Evenness", "MAP",
+  "Wet season precip.", "Pre-green-up precip.", "Pre-senescence precip.",
+    "Vegetation type", "Diurnal dT")
+names(pred_lookup) <- c("richness", "evenness", "map",
+  "cum_precip_seas", "cum_precip_pre", "cum_precip_end",
+  "cluster", "diurnal_temp_range")
+
+resp_lookup <- c("Cumulative EVI", "Season length", 
+  "Green-up rate", "Senescence rate",
+  "Green-up lag", "Senescence lag")
+names(resp_lookup) <- c("cum_vi", "s1_length", 
+  "s1_green_rate", "s1_senes_rate", 
+  "start_lag", "end_lag")
+
+# Define cluster name lookup
+clust_lookup <- c("1", "2", "3", "4")
+names(clust_lookup) <- c("1", "2", "3", "4")
+
 # Theme colours
 pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")
 
@@ -16,30 +35,11 @@ theme_panel <- function() {
   )
 }
 
-#' Get valid UTM zone from latitude and longitude in WGS84 decimal degrees
-#'
-#' @param x vector of longitude coordinates in decimal degrees
-#' @param y vector of latitude coordinate in decimal degrees
-#'
-#' @return Vector of UTM zones for each latitude-longitude pair
-#' 
-#' @export
-#' 
-latLong2UTM <- function(x, y) {
-  unlist(lapply(1:length(x), function(z) {
-    paste((floor((x[z] + 180) / 6) %% 60) + 1,
-      ifelse(y[z] < 0, "S", "N"),
-      sep = "")
-  }))
-}
-
 #' Generate a valid UTM WGS84 proj4string given a UTM zone
 #'
 #' @param x character vector defining UTM zones
 #'
 #' @return UTM proj4string character vector
-#' 
-#' @export
 #' 
 UTMProj4 <- function(x){
   unlist(lapply(1:length(x), function(y) {
@@ -51,49 +51,14 @@ UTMProj4 <- function(x){
   }))
 }
 
-#' 
+#' Format numbers for LaTeX
 #'
-#' @param sort logical, if true rows are sorted according to vector length on first two axes
+#' @param x numeric atomic
+#' @param digits integer number of digits to round to
+#' @param method method of rounding either "round" or "signif"
 #'
-#' @return 
+#' @return formatted character strign
 #' 
-#' @examples
-#' 
-#' 
-#' @export
-#' 
-pcoaArrows <- function(given_pcoa, trait_df, sort = FALSE) {
-    n <- nrow(trait_df)
-    points.stand <- scale(given_pcoa$vectors)
-    
-    # Compute covariance of variables with all axes
-    S <- cov(trait_df, points.stand)
-    
-    # Select only positive eigenvalues
-    pos_eigen = given_pcoa$values$Eigenvalues[seq(ncol(S))]
-    
-    # Standardize value of covariance (see Legendre & Legendre 1998)
-    U <- S %*% diag((pos_eigen/(n - 1))^(-0.5))
-    colnames(U) <- colnames(given_pcoa$vectors)
-    
-    # Add values of covariances inside object
-    given_pcoa$U <- U
-
-    if (sort) {
-      # Compute arrow vector lengths
-      dists <- list()
-      for (i in 1:nrow(given_pcoa$U)) {
-        dists[i] <- as.vector(dist(t(matrix(c(given_pcoa$U[i,1:2], 0,0), 2))))
-      }
-
-      # Order arrows dataframe by vector length 
-      given_pcoa$U <- as.data.frame(given_pcoa$U[order(unlist(dists), 
-          decreasing = TRUE),])
-    }
-    
-    return(given_pcoa)
-}
-
 numFormat <- function(x, digits = 2, method = "round"){
   sprintf(paste0("%.",digits,"f"),
     if (method == "round") {
@@ -142,7 +107,13 @@ pFormat <- function(p, print_p = TRUE, digits = 2){
   }))
 }
 
-
+#' Create LaTeX newcommand output
+#'
+#' @param x atomic vector to export
+#' @param name LaTeX variable name 
+#'
+#' @return string
+#' 
 commandOutput <- function(x, name){ 
   paste0("\\newcommand{\\",
     ifelse(missing(name), deparse(substitute(x)), name), 
@@ -150,26 +121,6 @@ commandOutput <- function(x, name){
     x, 
     "}"
   )
-}
-
-#' spaMM model effect sizes 
-#'
-#' @param mod spaMM model object
-#' @param intercept logical, should the intercept term be included?
-#'
-#' @return ggplot2 object
-#' 
-spammEff <- function(mod, intercept = FALSE) {
-  capture.output(mod_summ <- summary(mod))
-  slopes <- data.frame(var = row.names(mod_summ$beta_table), 
-    est = mod_summ$beta_table[,1], 
-    se = mod_summ$beta_table[,2])
-  row.names(slopes) <- NULL
-  if (!intercept) {
-    slopes <- slopes[slopes$var != "(Intercept)",]
-  }
-  slopes$var <- factor(slopes$var, levels = slopes$var[order(nrow(slopes):1)])
-  return(slopes)
 }
 
 corrPlot <- function(x, col = c("blue", "white", "red"), ...) {
@@ -215,86 +166,7 @@ corrPlot <- function(x, col = c("blue", "white", "red"), ...) {
     ggplot2::theme(legend.position = "none")
 }
 
-#' Extract predicted grid from spaMM model over range of observations
-#'
-#' @param fitobject spaMM model object
-#' @param gridSteps number of levels of xy grid
-#'
-#' @return dataframe of xy grid with predicted values
-#' 
-spammMapExtract <- function (fitobject, gridSteps = 200) {
-  # Obtain coordinates
-  info_olduniqueGeo <- attr(fitobject, "info.uniqueGeo")
-  coordinates <- unique(unlist(lapply(info_olduniqueGeo, colnames)))
-
-  pred <- predict(fitobject, binding = "fitted")
-  form <- spaMM::formula.HLfit(fitobject, which = "hyper")
-  map.formula <- as.formula(paste(attr(pred, "fittedName"),
-    " ~ 1 + ", paste(spaMM:::.findSpatial(form), collapse = " + ")))
-  smoothObject <- fitme(map.formula, data = pred, 
-    fixed = list(phi = 1e-05), method = "REML")
-  smoo <- predict(smoothObject, binding = "dummy")
-  x <- smoo[, coordinates[1]]
-  y <- smoo[, coordinates[2]]
-
-  marg <- 1/20
-  xrange <- range(x)
-  margex <- (xrange[2] - xrange[1]) * marg
-  xrange <- xrange + margex * c(-1, 1)
-
-  yrange <- range(y)
-  margey <- (yrange[2] - yrange[1]) * marg
-  yrange <- yrange + margey * c(-1, 1)
-
-  xGrid <- seq(xrange[1], xrange[2], length.out = gridSteps)
-  yGrid <- seq(yrange[1], yrange[2], length.out = gridSteps)
-  newdata <- expand.grid(xGrid, yGrid)
-  colnames(newdata) <- coordinates
-
-  newdata$val <- predict(smoothObject, newdata = newdata, 
-    variances = list(), control = list(fix_predVar = FALSE))
-  return(newdata)
-}
-
-
-#' Calculate Area Under Curve (AUC) using trapesium approximation
-#'
-#' @param x vector of x values
-#' @param y vector of y values
-#'
-calcAUC <- function(x, y) {
-  sum( diff(x) * (head(y,-1) + tail(y,-1)) ) / 2
-}
-
-# Run many iterations of NMDS to check optimal number of dimensions
-NMDS.scree <- function(x, dims = 10, ...) {
-  # Create dimensions vector
-  if (length(dims) == 1) {
-    dim_vec <- seq(dims) 
-  } else {
-    dim_vec <- dims
-  }
-
-  # Create list of metaMDS objects
-  meta_list <- lapply(dim_vec, function(y) {
-    metaMDS(x, k = y, ...)
-  })
-
-  # Extract stress values
-  stress_vec <- unname(unlist(lapply(meta_list, `[`, "stress")))
-
-  # Create plot
-  plot(dim_vec, stress_vec,
-    xlab = "# of Dimensions", ylab = "Stress", main = "NMDS stress plot")
-}
-
-# Build ellipses from vegan::ordiellipse
-covEllipse <- function(cov, center = c(0, 0), scale = 1, npoints = 100) {
-  theta <- seq(0, npoints) * 2 * pi / npoints
-  circle <- cbind(cos(theta), sin(theta))
-  t(center + scale * t(circle %*% chol(cov)))
-}
-
+# ggplot2 convex hulls
 # Here's the stat_
 StatBag <- ggplot2::ggproto("Statbag", ggplot2::Stat,
                    compute_group = function(data, scales, prop = 0.5) {
@@ -440,12 +312,7 @@ draw_group = function(data, panel_scales, coord) {
   draw_key = ggplot2::draw_key_polygon
 )
 
-# extract granule names
-granExtract <- function(x) { 
-  str_extract(x, "h[0-9][0-9]v[0-9][0-9]")
-}
-
-# Define function to decompose time series with overlap
+# Decompose time series with overlap
 seasonGet <- function(x, min_date, max_date, date = "date") {
   # Format date as date
   x[[date]] <- as.Date(x[[date]])

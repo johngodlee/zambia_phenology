@@ -19,7 +19,7 @@ source("functions.R")
 dat <- readRDS("dat/plots_phen.rds")
 
 # Read .csv files per granule 
-trmm <- read.csv("dat/trmm_extract.csv")
+trmm <- readRDS("dat/trmm.rds")
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 trmm_list <- split(trmm, trmm$plot_cluster)
@@ -170,4 +170,4 @@ saveRDS(trmm_df_clean, "dat/plots_trmm.rds")
 
 write(
   commandOutput(slc, "trmmSLC"),
-  file="out/vars.tex", append=TRUE)
+  file = "out/trmm_extract_vars.tex")

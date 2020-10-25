@@ -1,4 +1,4 @@
-# Filter SEOSAW data for phenology analysis
+# Filter SEOSAW plot data for phenology analysis
 # John Godlee (johngodlee@gmail.com)
 # 2020-09-02
 
@@ -10,15 +10,8 @@ library(tibble)
 
 source("functions.R")
 
-# Delete variables TeX file 
-if (file.exists("out/vars.tex")) {
-  file.remove("out/vars.tex")
-}
-
 # Import data
 plots <- read.csv("~/git_proj/seosaw_data/data_out/plots_v2.7.csv")
-stems <- read.csv("~/git_proj/seosaw_data/data_out/stems_latest_v2.7.csv")
-load("/Users/johngodlee/google_drive/phd/thesis/regional_befr/data/seosaw_plot_summary5Apr2019.Rdata")
 
 # Subset plots and data fields - Zambia ILUAii data only
 plots_fil_sf <- plots %>% 
@@ -66,69 +59,12 @@ plot_id_lookup <- plots %>%
   filter(plot_id %in% unlist(plots_fil_sf$plot_id_vec)) %>%
   dplyr::select(plot_cluster, plot_id)
 
-# Filter stems by plot ID
-stems_fil <- stems %>%
-  inner_join(., plot_id_lookup, by = "plot_id") %>%
-  filter(diam >= 10)
-
-# Define stem percentage filter parameters
-mopane_per <- 0.5
-stems_ha <- 50
-stem_size <- 10
-
-# Create tree species abundance matrix by plot
-tree_ab_mat_plot <- stems_fil %>% 
-  dplyr::select(plot_id, tree_id, species_name_clean) %>%  # Select columns
-  filter(!is.na(species_name_clean)) %>%  # Remove stems with no species
-  group_by(plot_id, tree_id) %>%  # Group by plot and tree ID
-  filter(row_number() == 1) %>%  # Remove duplicated tree measurements
-  group_by(plot_id, species_name_clean, .drop = FALSE) %>%
-  tally() %>%
-  spread(species_name_clean, n, fill = 0) %>%
-  ungroup() %>%
-  mutate_at(vars(-plot_id), as.double) %>%
-  as.data.frame() %>%
-  dplyr::select(-`Indet indet`) %>%  # Remove stems with no species
-  column_to_rownames("plot_id")
-
-# Create tree species abundance matrix by plot cluster
-tree_ab_mat_clust <- stems_fil %>% 
-  dplyr::select(plot_cluster, tree_id, species_name_clean) %>%
-  filter(!is.na(species_name_clean)) %>%
-  group_by(plot_cluster, tree_id) %>%
-  filter(row_number() == 1) %>%
-  group_by(plot_cluster, species_name_clean, .drop = FALSE) %>%
-  tally() %>%
-  spread(species_name_clean, n, fill = 0) %>%
-  ungroup() %>%
-  mutate_at(vars(-plot_cluster), as.double) %>%
-  as.data.frame() %>%
-  dplyr::select(-`Indet indet`) %>%
-  column_to_rownames("plot_cluster") %>%
-  filter_all(any_vars(. != 0)) %>%
-  filter(rowSums(.) / 
-    (pull(st_drop_geometry(
-      plots_fil_sf[plots_fil_sf$plot_cluster %in% row.names(.), "plot_id_length"]
-      )) * 0.1) > stems_ha) %>%  # Remove plots with fewer than x stems ha
-  filter((.$`Colophospermum mopane` / rowSums(.)) < mopane_per)  # Filter mopane plots
-
-# Remove plots not in tree abundance matrix
-plots_clean <- filter(plots_fil_sf, plot_cluster %in% rownames(tree_ab_mat_clust))
-
-tree_ab_mat_plot_clean <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% 
-  unlist(plots_clean$plot_id_vec),]
-
 # Write files
-saveRDS(plots_clean, "dat/plots.rds")
-saveRDS(tree_ab_mat_clust, "dat/tree_ab_mat.rds")
-saveRDS(tree_ab_mat_plot, "dat/tree_ab_mat_plot.rds")
+saveRDS(plots_fil_sf, "dat/plots.rds")
 saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 
 # Write stats to .tex
 write(
   c(commandOutput(census, "censusDate"),
-    commandOutput(stems_ha, "stemsHa"),
-    commandOutput(stem_size, "stemSize"),
-    commandOutput(mopane_per*100, "mopanePer"),
     commandOutput(n_total_sites, "nTotalSites")),
-  file="out/vars.tex", append=TRUE)
+  file = "out/data_prep_vars.tex")

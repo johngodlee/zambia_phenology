@@ -21,14 +21,17 @@ library(dplyr)
 library(raster)
 library(readr)
 
-source("functions.R")
-
 # Import plot data 
 plots <- readRDS("dat/plots.rds")
 
 # Get HDF file names 
 files <- list.files("/Volumes/UNTITLED/modis_250", pattern = "*.hdf", 
   full.names = TRUE)
+
+# extract granule names
+granExtract <- function(x) { 
+  str_extract(x, "h[0-9][0-9]v[0-9][0-9]")
+}
 
 files_split <- split(files, granExtract(files))
 
@@ -120,4 +123,30 @@ for (i in seq(length(files_split))) {
   # Remove .txt files
   file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
 }
+
+# Read .csv files per granule 
+csv_files <- list.files(data_dir, "evi_h.*_extract.csv", full.names = TRUE)
+csv_list <- lapply(csv_files, read.csv)
+
+# Check that no plots have been included in both granules 
+any(
+  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[2]]$plot_cluster)),
+  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
+  intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
+  intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
+  intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
+  intersect(unique(csv_list[[3]]$plot_cluster), unique(csv_list[[4]]$plot_cluster))
+  )
+
+# Join csv files
+evi_ts_df <- do.call(rbind, csv_list)
+evi_ts_df$date <- unlist(lapply(evi_ts_df$date, as.Date, 
+    tryFormats = c("%Y-%m-%d", "%d/%m/%Y")))
+
+# Write large raw data
+saveRDS(evi_ts_df, "dat/evi.rds")
+
+# Remove .csv files
+file.remove(list.files(data_dir, "evi_h.*_extract.csv", full.names = TRUE))
+
 

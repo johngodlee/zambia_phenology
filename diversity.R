@@ -17,22 +17,77 @@ library(labdsv)
 library(shades)
 library(tibble)
 library(xtable)
+library(tidyr)
 
 source("functions.R")
 
 # Import data
-tree_ab_mat <- readRDS("dat/tree_ab_mat.rds")
-tree_ab_mat_plot <- readRDS("dat/tree_ab_mat_plot.rds")
+stems <- read.csv("~/git_proj/seosaw_data/data_out/stems_latest_v2.7.csv")
 
 plots <- readRDS("dat/plots_trmm.rds") 
+plots <- st_as_sf(plots)
 
 plot_id_lookup <- readRDS("dat/plot_id_lookup.rds")
 
+# Filter stems by plot ID
+stems_fil <- stems %>%
+  inner_join(., plot_id_lookup, by = "plot_id") %>%
+  filter(diam >= 10) %>% 
+  filter(plot_cluster %in% plots$plot_cluster)
+
+# Define stem percentage filter parameters
+mopane_per <- 0.5
+stems_ha <- 50
+stem_size <- 10
+
+tree_ab_mat_plot <- stems_fil %>% 
+  dplyr::select(plot_id, tree_id, species_name_clean) %>%  # Select columns
+  filter(!is.na(species_name_clean)) %>%  # Remove stems with no species
+  group_by(plot_id, tree_id) %>%  # Group by plot and tree ID
+  filter(row_number() == 1) %>%  # Remove duplicated tree measurements
+  group_by(plot_id, species_name_clean, .drop = FALSE) %>%
+  tally() %>%
+  spread(species_name_clean, n, fill = 0) %>%
+  ungroup() %>%
+  mutate_at(vars(-plot_id), as.double) %>%
+  as.data.frame() %>%
+  dplyr::select(-`Indet indet`) %>%  # Remove stems with no species
+  column_to_rownames("plot_id")
+
+# Create tree species abundance matrix by plot cluster
+tree_ab_mat_clust <- stems_fil %>% 
+  dplyr::select(plot_cluster, tree_id, species_name_clean) %>%
+  filter(!is.na(species_name_clean)) %>%
+  group_by(plot_cluster, tree_id) %>%
+  filter(row_number() == 1) %>%
+  group_by(plot_cluster, species_name_clean, .drop = FALSE) %>%
+  tally() %>%
+  spread(species_name_clean, n, fill = 0) %>%
+  ungroup() %>%
+  mutate_at(vars(-plot_cluster), as.double) %>%
+  as.data.frame() %>%
+  dplyr::select(-`Indet indet`) %>%
+  column_to_rownames("plot_cluster") %>%
+  filter_all(any_vars(. != 0)) %>%
+  filter(rowSums(.) / 
+    (pull(st_drop_geometry(
+      plots[plots$plot_cluster %in% row.names(.), "plot_id_length"]
+      )) * 0.1) > stems_ha) %>%  # Remove plots with fewer than x stems ha
+  filter((.$`Colophospermum mopane` / rowSums(.)) < mopane_per)  # Filter mopane plots
+
+# Remove plots not in tree abundance matrix
+plots_clean <- filter(plots, plot_cluster %in% rownames(tree_ab_mat_clust))
+tree_ab_mat_plot_clean <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% 
+  unlist(plots_clean$plot_id_vec),]
+
+# Write tree abundance matrices
+saveRDS(tree_ab_mat_clust, "dat/tree_ab_mat.rds")
+saveRDS(tree_ab_mat_plot, "dat/tree_ab_mat_plot.rds")
+
 # Exclude clusters with mental species composition
 # Exclude species which are clearly non-native
-ab_mat_clean <- tree_ab_mat %>%
-  filter(row.names(.) %in% plots$plot_cluster,
-    !row.names(.) %in% c("ZIS_2958", "ZIS_2385", "ZIS_3765")) %>%
+ab_mat_clean <- tree_ab_mat_clust %>%
+  filter(!row.names(.) %in% c("ZIS_2958", "ZIS_2385", "ZIS_3765")) %>%
   dplyr::select(-starts_with("Pinus"), -starts_with("Eucalyptus"))
 
 # Calculate common  diversity statistics
@@ -49,7 +104,7 @@ ab_mat_fil <- ab_mat_clean[
 ab_mat_fil <- ab_mat_fil[rowSums(ab_mat_fil) != 0,]  # Remove plots with no individuals
 ab_mat_fil <- ab_mat_fil[,colSums(ab_mat_fil) != 0]  # Remove species with no individuals
 
-plots_fil <- plots %>%
+plots_fil <- plots_clean %>%
   filter(plot_cluster %in% row.names(ab_mat_fil))
 
 # Conduct NSCA (Non-symmetric Correspondence Analysis) 
@@ -187,8 +242,10 @@ plot_dist_per <- round(length(which(plot_dist_mean_clean < plot_dist_all_mean)) 
 write(
   c(
     commandOutput(plot_dist_per, "plotDistPer"),
-    commandOutput(nsca_inertia, "nscaInertia")
+    commandOutput(nsca_inertia, "nscaInertia"),
+    commandOutput(mopane_per*100, "mopanePer"),
+    commandOutput(stems_ha, "stemsHa"),
+    commandOutput(stem_size, "stemSize")
     ),
-  file="out/vars.tex", 
-  append = TRUE)
+  file = "out/diversity_vars.tex")
 
