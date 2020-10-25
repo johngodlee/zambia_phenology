@@ -12,7 +12,7 @@ library(ggplot2)
 # Import data
 plots <- readRDS("dat/plots.rds")
 
-af <- st_read("~/Desktop/africa_countries/africa.shp")
+af <- st_read("dat/africa_countries/africa.shp")
 
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
