@@ -22,7 +22,7 @@ dat <- st_as_sf(dat)
 
 phen_stack <- readRDS("dat/vipphen_stack.rds")
 
-af <- st_read("/Users/johngodlee/Desktop/africa_countries/africa.shp")
+af <- st_read("dat/africa_countries/africa.shp")
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
 
