@@ -1,6 +1,8 @@
 .DS_Store
 dat/evi_tif/**
 dat/trmm_tif/**
+dat/stems_latest_v2.7.csv
+dat/plots_v2.7.csv
 img/**
 old/**
 reading/**
