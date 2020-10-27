@@ -4,20 +4,18 @@
 
 # Packages
 library(dplyr)
+library(tidyr)
 library(sf)
 library(vegan)
-library(ape)
-library(ggplot2)
-library(ggrepel)
-library(patchwork)
-library(viridis)
 library(ade4)
+library(ggplot2)
+library(patchwork)
 library(cluster)
 library(labdsv)
 library(shades)
 library(tibble)
 library(xtable)
-library(tidyr)
+library(ggdendro)
 
 source("functions.R")
 
@@ -84,11 +82,9 @@ tree_ab_mat_plot_clean <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in%
 saveRDS(tree_ab_mat_clust, "dat/tree_ab_mat.rds")
 saveRDS(tree_ab_mat_plot, "dat/tree_ab_mat_plot.rds")
 
-# Exclude clusters with mental species composition
 # Exclude species which are clearly non-native
 ab_mat_clean <- tree_ab_mat_clust %>%
-  filter(!row.names(.) %in% c("ZIS_2958", "ZIS_2385", "ZIS_3765")) %>%
-  dplyr::select(-starts_with("Pinus"), -starts_with("Eucalyptus"))
+  dplyr::select(-starts_with("Pinus"), -starts_with("Eucalyptus")) 
 
 # Calculate common  diversity statistics
 div_df <- data.frame(plot_cluster = row.names(ab_mat_clean), 
@@ -102,41 +98,94 @@ div_df <- data.frame(plot_cluster = row.names(ab_mat_clean),
 ab_mat_fil <- ab_mat_clean[
   unname(apply(ab_mat_clean, 1, function(x) { sum(x > 1, na.rm = TRUE) })) >= 5,]  
 ab_mat_fil <- ab_mat_fil[rowSums(ab_mat_fil) != 0,]  # Remove plots with no individuals
-ab_mat_fil <- ab_mat_fil[,colSums(ab_mat_fil) != 0]  # Remove species with no individuals
+ab_mat_fil <- ab_mat_fil[,colSums(ab_mat_fil) > 5]  # Remove species with less than 5 occurrences
 
 plots_fil <- plots_clean %>%
   filter(plot_cluster %in% row.names(ab_mat_fil))
 
-# Conduct NSCA (Non-symmetric Correspondence Analysis) 
-##' 4 axes
+# NSCA on species abundance
 naxes <- 4
 nsca <- dudi.nsc(df = ab_mat_fil, scannf = FALSE, nf = naxes)
 
-nsca_inertia <- round(nsca$eig[naxes+1], 2)
+nsca_inertia <- round(nsca$eig[naxes+1], 2)*10
 
-##' p = species
-##' n = sites
 
-# Run clustering around medoids
-##' 4 clusters
-pam_clust <- pam(nsca$li, k = 4, metric = "manhattan", diss = FALSE)
+# Extract euclidean distances between plots from NSCA
+nsca_dist <- dist(nsca$li)
+
+# Determine optimal number of clusters for hieriarchical clustering
+kval <- seq(2,10)
+
+v <- unlist(lapply(seq(length(kval)), function(x) {
+    clust <- hclust(nsca_dist, method = "ward.D2")
+    clust_cut <- cutree(clust, k = kval[x])
+    ss <- cluster::silhouette(clust_cut, nsca_dist)
+    mean(ss[, 3])
+}))
+
+sil <- data.frame(kval, v)
+
+n_clusters <- sil$kval[which.max(sil$v)]
+
+# Silhouette plot
+pdf(file = "img/clust_sil.pdf", width = 8, height = 5)
+ggplot(sil, aes(x = kval, y = v)) + 
+  geom_point() + 
+  geom_path() + 
+  geom_vline(xintercept = n_clusters, linetype = 2) +
+  theme_panel() + 
+  labs(x = "Clusters", y = "Mean silhouette width") 
+dev.off()
+
+# Cluster euclidean distances of NSCA with ward algorithm
+ward_clust <- hclust(nsca_dist, method = "ward.D2")
+ward_dat <- dendro_data(ward_clust)
+
+plot.new()
+clust_classif <- rect.hclust(ward_clust, k = n_clusters)
+clust_df <- do.call(rbind, lapply(seq(length(clust_classif)), function(x) {
+  data.frame(plot_cluster = names(clust_classif[[x]]), cluster = as.character(x))
+}))
+
+ward_merge <- left_join(ward_dat$labels, clust_df, by = c("label" = "plot_cluster"))
+
+ward_rect <- ward_merge %>% 
+  group_by(cluster) %>%
+  summarise(xmin = min(x)+1, 
+    xmax = max(x)-1) %>%
+  mutate(ymin = 0, ymax = 3,
+    cluster = factor(cluster, 
+      labels = clust_lookup[1:length(unique(.$cluster))]))
+
+# Dendrogram with clusters
+pdf(file = "img/clust_dendro.pdf", width = 8, height = 5)
+ggplot() + 
+  geom_segment(data = ward_dat$segments, 
+    aes(x = x, y = y, xend = xend, yend = yend)) + 
+  geom_rect(data = ward_rect, 
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, colour = cluster),
+    size = 1.2, fill = NA) + 
+  theme_panel() + 
+  scale_colour_manual(values = clust_pal)
+dev.off()
 
 # Extract data from clustering and NSCA
-nsc_df <- data.frame(plot_cluster = names(pam_clust$clustering), 
-  cluster = unname(pam_clust$clustering)) %>% 
+nsc_df <- ward_merge %>%
+  dplyr::select(plot_cluster = label, cluster) %>%
   left_join(., rownames_to_column(nsca$l1), by = c("plot_cluster" = "rowname")) %>%
   mutate(cluster = as.character(cluster))
 
-# Plot of clusters
+# NSCA ordination plot with clusters
 nscaPlot <- function(x,y, dat = nsc_df) {
   x <- ensym(x)
   y <- ensym(y)
 
-  p <- ggplot(dat, aes(x = !!x, y = !!y)) + 
-    geom_point(shape = 21, size = 2, aes(fill = cluster)) + 
-    geom_bag(prop = 0.95, alpha = 0.2, aes(colour = cluster, fill = cluster)) + 
-    scale_fill_manual(name = "Cluster", values = clust_pal) + 
-    theme_panel() + 
+  p <- ggplot(dat, aes(x = !!x, y = !!y)) +
+    geom_point(shape = 21, size = 2, aes(fill = cluster)) +
+    geom_bag(prop = 0.95, alpha = 0.2, aes(colour = cluster, fill = cluster)) +
+    scale_fill_manual(name = "Cluster", values = clust_pal) +
+    scale_colour_manual(name = "Cluster", values = clust_pal) +
+    theme_panel() +
     labs(x = gsub("RS", "NSC ", x),
       y = gsub("RS", "NSC ", y))
 
@@ -145,32 +194,31 @@ nscaPlot <- function(x,y, dat = nsc_df) {
 
 pdf(file = "img/nsca.pdf", width = 12, height = 6)
 nscaPlot(RS1, RS2) +
-  nscaPlot(RS3, RS4) + 
-  plot_layout(guides = "collect", widths = 1) & 
-  scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5), 
+  nscaPlot(RS3, RS4) +
+  plot_layout(guides = "collect", widths = 1) &
+  scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
     limits = unique(nsc_df$cluster))
 dev.off()
 
 # Add values to data
 div <- plots_fil %>%
   left_join(., div_df, by = "plot_cluster")  %>%
-  left_join(., nsc_df, by = "plot_cluster") 
+  left_join(., clust_df, by = "plot_cluster") 
 
 # Write file
 saveRDS(div, "dat/plots_div.rds") 
 
-
 # Indicator species per cluster
-clust_indval <- indval(ab_mat_fil, clustering = nsc_df$cluster)
+clust_indval <- indval(ab_mat_fil, clustering = div$cluster)
 
 # Summarise indicator analysis
 summary(clust_indval, p = 0.05, type = "short", digits = 2, show = p)
 clust_indval$indval$sp <- row.names(clust_indval$indval)
 row.names(clust_indval$indval) <- seq(from = 1, to = length(clust_indval$indval$sp))
 
-indval_extrac <- lapply(1:4, function(x) {
+indval_extrac <- lapply(1:n_clusters, function(x) {
     out <- head(clust_indval$indval[order(clust_indval$indval[[x]], 
-          decreasing = TRUE),c(5, x)])
+          decreasing = TRUE),c(n_clusters+1, x)])
     out[!grepl("indet", out$sp, ignore.case = TRUE),]
   })
 
@@ -184,7 +232,6 @@ indval_extrac_tidy <- do.call(rbind, lapply(indval_extrac, function(x) {
 )
 
 # Export indval table
-
 indval_extrac_tidy$Species <- paste0("\\textit{", indval_extrac_tidy$Species, "}")
 
 indval_xtable <- xtable(indval_extrac_tidy, 
@@ -197,7 +244,7 @@ indval_xtable <- xtable(indval_extrac_tidy,
 fileConn <- file("out/indval.tex")
 writeLines(print(indval_xtable, include.rownames = FALSE,
     table.placement = "h",
-    hline.after = c(-1,0,3,6,9,12),
+    hline.after = c(-1,0,seq(from = 3, by = 3, length.out = n_clusters-1)),
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)
@@ -247,10 +294,12 @@ plot_dist_per <- round(length(which(plot_dist_mean_clean < plot_dist_all_mean)) 
 write(
   c(
     commandOutput(plot_dist_per, "plotDistPer"),
-    commandOutput(nsca_inertia, "nscaInertia"),
     commandOutput(mopane_per*100, "mopanePer"),
+    commandOutput(nsca_inertia, "nscaInertia"),
+    commandOutput(naxes, "nscaAxes"),
     commandOutput(stems_ha, "stemsHa"),
-    commandOutput(stem_size, "stemSize")
+    commandOutput(stem_size, "stemSize"),
+    commandOutput(n_clusters, "nCluster")
     ),
   file = "out/diversity_vars.tex")
 
