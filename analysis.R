@@ -28,7 +28,8 @@ zambia <- af %>%
 
 # Calculate some statistics
 dat_clean <- dat %>%
-  mutate(cluster = factor(cluster, labels = clust_lookup),
+  mutate(cluster = factor(cluster, 
+      labels = clust_lookup[1:length(unique(dat$cluster))]),
     start_lag = s1_start - trmm_start,
     end_lag = s1_end - trmm_end)
   

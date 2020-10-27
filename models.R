@@ -14,6 +14,7 @@ library(ggplot2)
 library(ggnewscale)
 library(shades)
 library(xtable)
+library(car)
 
 source("functions.R")
 
@@ -160,6 +161,7 @@ all_mod_list <- list(max_ml_list, dredge_list, null_ml_list,
 
 # Write models
 saveRDS(all_mod_list, "dat/all_mod_list.rds")
+all_mod_list <- readRDS("dat/all_mod_list.rds")
 
 # Export model statistics table
 mod_stat_df <- as.data.frame(do.call(rbind, lapply(all_mod_list[[6]], function(x) {
@@ -240,7 +242,12 @@ mod_slope_df <- do.call(rbind, lapply(all_mod_list[[5]], function(x) {
   mutate(term = factor(term, levels = rev(names(pred_lookup)), labels = rev(pred_lookup)),
     resp = factor(resp, 
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
-      labels = resp_lookup[c(1,3,5,2,4,6)]))
+      labels = resp_lookup[c(1,3,5,2,4,6)]),
+    psig = case_when(
+      p.value <= 0.05 ~ "*",
+      p.value <= 0.01 ~ "**",
+      p.value <= 0.001 ~ "***",
+      TRUE ~ NA_character_))
 
 pdf(file = "img/mod_slopes.pdf", width = 10, height = 5)
 ggplot() +
@@ -251,6 +258,9 @@ ggplot() +
   geom_point(data = mod_slope_df,
     aes(x = estimate, y = term, fill = group),
     shape = 21, colour = "black") + 
+  geom_text(data = mod_slope_df,
+    aes(x = estimate, y = term, colour = group, label = psig),
+    size = 8, nudge_y = 0.1) + 
   facet_wrap(~resp, scales = "free_x") + 
   scale_fill_manual(name = "", values = pal[3:4]) +
   scale_colour_manual(name = "", values = pal[3:4]) +
@@ -260,14 +270,36 @@ ggplot() +
 dev.off()
 
 # Export interaction effect on richness plots
-rand_marg_df <- do.call(rbind, lapply(all_mod_list[[5]], function(i) {
-  preds <- as.data.frame(ggemmeans(model = i, 
+rand_marg_df <- do.call(rbind, lapply(all_mod_list[[5]], function(x) {
+  preds <- as.data.frame(ggemmeans(model = x,
       terms = c("richness", "cluster")))
-  preds$resp <- gsub("\\s~.*", "", i$call[[2]])[2]  
+  preds$resp <- gsub("\\s~.*", "", x$call[[2]])[2]  
   names(preds) <- c("richness", "pred", "se", "conf_lo", "conf_hi", "cluster", "resp")
   return(preds)
 }))
-rand_marg_df$resp <- factor(rand_marg_df$resp, 
+rand_marg_df$resp_clean <- factor(rand_marg_df$resp, 
+      levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
+      labels = resp_lookup[c(1,3,5,2,4,6)])
+
+marg_signif <- do.call(rbind, lapply(all_mod_list[[5]], function(x) {
+  summ <- Anova(x)
+  psig <- case_when(
+      summ[,3] <= 0.05 ~ "*",
+      summ[,3] <= 0.01 ~ "**",
+      summ[,3] <= 0.001 ~ "***",
+      TRUE ~ NA_character_)
+  out <- data.frame(resp = gsub("\\s~.*", "", x$call[2]),
+    variable = row.names(summ), psig) 
+  out <- out[out$variable == "richness:cluster",]
+  out$x <- 0
+  out$resp
+  midpoint <- mean(rand_marg_df[rand_marg_df$resp == out$resp & 
+    rand_marg_df$richness == 0,"pred"])
+  out$y <- midpoint + 
+    (max(rand_marg_df[rand_marg_df$resp == out$resp,"conf_hi"]) - midpoint) * 0.25
+  return(out)
+  }))
+marg_signif$resp_clean <- factor(marg_signif$resp, 
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
       labels = resp_lookup[c(1,3,5,2,4,6)])
 
@@ -281,9 +313,12 @@ ggplot() +
   geom_line(data = rand_marg_df, 
     aes(x = richness, y = pred, colour = cluster),
     size = 1.5) + 
+  geom_text(data = marg_signif, 
+    aes(x = x, y = y, label = psig),
+    size = 8) + 
   scale_colour_manual(name = "Cluster", 
     values = brightness(clust_pal, 0.75)) +
-  facet_wrap(~resp, scales = "free_y") + 
+  facet_wrap(~resp_clean, scales = "free_y") + 
   theme_panel() +
   labs(x = "Species richness", y = "")
 dev.off()

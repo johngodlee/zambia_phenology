@@ -23,7 +23,7 @@ $(IMGDIR)/ts_example.pdf $(DATDIR)/plots_phen.rds $(OUTDIR)/modis_extract_vars.t
 $(DATDIR)/plots_trmm.rds $(OUTDIR)/trmm_extract_vars.tex : trmm_extract.R functions.R $(DATDIR)/plots_phen.rds $(DATDIR)/trmm.rds
 	Rscript $<
 
-$(DATDIR)/plots_div.rds $(IMGDIR)/nsca.pdf $(OUTDIR)/indval.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_trmm.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/stems_latest_v2.7.csv
+$(DATDIR)/plots_div.rds $(OUTDIR)/indval.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_trmm.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/stems_latest_v2.7.csv
 	Rscript $<
 
 $(DATDIR)/plots_anal.rds $(OUTDIR)/analysis_vars.tex $(IMGDIR)/phen_dens_clust.pdf $(IMGDIR)/plot_loc.pdf : analysis.R functions.R $(DATDIR)/plots_div.rds $(DATDIR)/vipphen_stack.rds 
