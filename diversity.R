@@ -104,11 +104,10 @@ plots_fil <- plots_clean %>%
   filter(plot_cluster %in% row.names(ab_mat_fil))
 
 # NSCA on species abundance
-naxes <- 4
+naxes <- 2
 nsca <- dudi.nsc(df = ab_mat_fil, scannf = FALSE, nf = naxes)
 
 nsca_inertia <- round(nsca$eig[naxes+1], 2)*10
-
 
 # Extract euclidean distances between plots from NSCA
 nsca_dist <- dist(nsca$li)
@@ -192,9 +191,8 @@ nscaPlot <- function(x,y, dat = nsc_df) {
   return(p)
 }
 
-pdf(file = "img/nsca.pdf", width = 12, height = 6)
+pdf(file = "img/nsca.pdf", width = 8, height = 6)
 nscaPlot(RS1, RS2) +
-  nscaPlot(RS3, RS4) +
   plot_layout(guides = "collect", widths = 1) &
   scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
     limits = unique(nsc_df$cluster))
@@ -243,7 +241,7 @@ indval_xtable <- xtable(indval_extrac_tidy,
 
 fileConn <- file("out/indval.tex")
 writeLines(print(indval_xtable, include.rownames = FALSE,
-    table.placement = "h",
+    table.placement = "H",
     hline.after = c(-1,0,seq(from = 3, by = 3, length.out = n_clusters-1)),
     sanitize.text.function = function(x) {x}), 
   fileConn)

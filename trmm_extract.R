@@ -12,6 +12,7 @@ library(mgcv)
 library(zoo)
 library(gratia)
 library(gridExtra)
+library(RcppRoll)
 
 source("functions.R")
 
@@ -72,31 +73,55 @@ gam_list <- lapply(trmm_split, function(x) {
 # Calculate key statistics: 
 trmm_df <- data.frame(plot_cluster = names(gam_list))
 
-# Define change in slope parameter
-slc <- 0.06
+# Start of rainy season
+win_len <- 20
 
-# Start and end of growing season
 ##' Using first derivatives of GAM
-##' Start = slope first +5
-##' End = slope last -5
-trmm_df$trmm_start <- unlist(lapply(gam_list, function(x) {
-  mod <- x[[1]] 
+##' Filter to before max EVI
+##' First rolling period where positive slope of GAM exceeds 50% of max slope
+trmm_df$trmm_start <- unlist(lapply(seq(length(gam_list)), function(x) {
+  # Extract mod and predicted values
+  mod <- gam_list[[x]][[1]] 
+  pred <- gam_list[[x]][[2]] 
 
-  der <- derivatives(mod, type = "forward")
+  # First derivative
+  der <- as.data.frame(derivatives(mod, type = "forward", 
+    newdata = data.frame(doy = pred_data)))
+  der <- der[,c(3,4)]
 
-  der_fil <- der[der$data > -150,]
+  # Find rolling period minimum slopes
+  roll <- roll_min(der$derivative, n = win_len, by = 1, align = "left", fill = NA)
 
-  round(pull(der_fil[which(der_fil$derivative >= slc), "data"])[1])
+  # Find 50% of max slope
+  max_slope_half <- max(der$derivative) * 0.5
+
+  # Find first rolling period where all slope exceed 50% of max slope
+  sos <- der[roll >= max_slope_half, "data"][1]
+
+  return(sos)
 }))
 
-trmm_df$trmm_end <- unlist(lapply(gam_list, function(x) {
-  mod <- x[[1]] 
+trmm_df$trmm_end <- unlist(lapply(seq(length(gam_list)), function(x) {
+  # Extract mod and predicted values
+  mod <- gam_list[[x]][[1]] 
+  pred <- gam_list[[x]][[2]] 
 
-  der <- derivatives(mod, type = "backward")
+  # First derivative
+  der <- as.data.frame(derivatives(mod, type = "backward", 
+    newdata = data.frame(doy = pred_data)))
+  der <- der[,c(3,4)]
 
-  der_fil <- der[der$data < 200,]
+  # Find rolling period maximum slopes
+  roll <- roll_max(der$derivative, n = win_len, by = 1, align = "right", fill = NA)
 
-  round(last(pull(der_fil[which(der_fil$derivative <= -slc), "data"])))
+  # Find 50% of max slope
+  min_slope_half <- min(der$derivative) * 0.5
+
+  # Find first rolling period where all slope exceed 50% of max slope
+  eos <- der[roll <= min_slope_half, "data"]
+  eos <- eos[length(eos)]
+
+  return(eos)
 }))
 
 # Season length
@@ -110,56 +135,61 @@ gam_fil <- lapply(seq(length(gam_list)), function(x) {
 })
 
 trmm_df$cum_precip_seas <- unlist(lapply(seq(length(gam_fil)), function(x) {
-  sum(gam_fil[[x]]$pred)
+  sum(diff(gam_fil[[x]][["doy"]]) * rollmean(gam_fil[[x]][["pred"]], 2))
 }))
 
 # Cumulative precipitation in dry season before wet season (pre-season 90 days)
 trmm_df$cum_precip_pre <- unlist(lapply(seq(length(gam_list)), function(x) {
   mod <- gam_list[[x]][[2]]
   season_start <- trmm_df[x, "trmm_start"]
-  sum(mod[mod$doy <= season_start & mod$doy >= (season_start - 90), "pred"])
+  mod_fil <- mod[mod$doy < season_start & mod$doy >= (season_start - 90),]
+  sum(diff(mod_fil[,"doy"]) * rollmean(mod_fil["pred"], 2))
 }))
 
 # Cumulative precipitation in dry season before end of season (end season -90 days)
 trmm_df$cum_precip_end <- unlist(lapply(seq(length(gam_list)), function(x) {
   mod <- gam_list[[x]][[2]]
   season_end <- trmm_df[x, "trmm_end"]
-  sum(mod[mod$doy <= season_end & mod$doy >= (season_end - 90), "pred"])
+  mod_fil <- mod[mod$doy < season_end & mod$doy >= (season_end - 90),]
+  sum(diff(mod_fil[,"doy"]) * rollmean(mod_fil["pred"], 2))
 }))
 
-trmm_df_clean <- trmm_df %>%
-  left_join(., dat, by = "plot_cluster") %>%
+trmm_df_clean <- dat %>%
+  left_join(., trmm_df, by = "plot_cluster") %>%
   filter(!is.na(trmm_start))
+
+gam_list_clean <- gam_list[names(gam_list) %in% unique(trmm_df_clean$plot_cluster)]
 
 # Make a plot which demonstrates all the different numeric phenology stats
 stat_plot <- function(x, raw = FALSE) {
+
+  trmm_df_clean <- as.data.frame(st_drop_geometry(trmm_df_clean))
   # Predict values of greenup and senescence rate
   p <- ggplot()
 
   if (raw) {
     trmm_raw <- trmm_clean %>% 
-      filter(plot_cluster == names(gam_list[x]))
+      filter(plot_cluster == names(gam_list_clean[x]))
 
     p <- p + geom_path(data = trmm_raw, aes(x = doy, y = precip, group = season),
       alpha = 0.5) 
   }
 
   p <- p + 
-    geom_path(data = gam_list[[x]][[2]], aes(x = doy, y = pred), size = 1.5)
+    geom_path(data = gam_list_clean[[x]][[2]], aes(x = doy, y = pred), size = 1.5)
 
   p + 
     geom_vline(xintercept = trmm_df_clean[
-        trmm_df_clean$plot_cluster == names(gam_list[x]), "trmm_start"], 
-      colour = "green") + 
-    geom_vline(xintercept = trmm_df_clean[
-        trmm_df_clean$plot_cluster == names(gam_list[x]), "trmm_end"], 
+        trmm_df_clean$plot_cluster == names(gam_list_clean[x]), "trmm_start"], 
+      colour = "green") + geom_vline(xintercept = trmm_df_clean[
+        trmm_df_clean$plot_cluster == names(gam_list_clean[x]), "trmm_end"], 
       colour = "brown") + 
     theme_panel() + 
     labs(x = "Days from 1st Jan.", y = "precip") + 
-    ggtitle(names(gam_list[x]))
+    ggtitle(names(gam_list_clean[x]))
 }
 
-plot_list <- lapply(sample(length(gam_list), 50), stat_plot)
+plot_list <- lapply(sample(length(gam_list_clean), 50), stat_plot)
 
 pdf(file = "img/trmm_example.pdf", width = 15, height = 10) 
 grid.arrange(grobs = plot_list)
@@ -169,5 +199,5 @@ dev.off()
 saveRDS(trmm_df_clean, "dat/plots_trmm.rds")
 
 write(
-  commandOutput(slc, "trmmSLC"),
+  commandOutput(win_len, "trmmWin"),
   file = "out/trmm_extract_vars.tex")

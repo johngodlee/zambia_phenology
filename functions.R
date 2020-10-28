@@ -21,7 +21,7 @@ names(clust_lookup) <- c("1", "2", "3", "4")
 pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")
 
 # Cluster colours
-clust_pal <- c("#5cb930", "#6e49cc", "#49b9da", "#da2c57")
+clust_pal <- c("#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e","#49b9da","#a6761d")
 
 # ggplot2 theme
 theme_panel <- function() {

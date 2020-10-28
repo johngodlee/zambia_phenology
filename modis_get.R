@@ -47,7 +47,7 @@ if (!dir.exists(out_dir)) {
 
 # Define parameters 
 nodata <- -3000
-scaledata <- 0.000001
+scaledata <- 0.0001
 
 # For each granule:
 for (i in seq(length(files_split))) {

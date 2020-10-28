@@ -95,6 +95,8 @@ null_ml_list <- list(null_ml_c, null_ml_l, null_ml_r,
   null_ml_d, null_ml_s, null_ml_e)
 
 # Fit ML version of "best" models
+#dredge_list
+
 best_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
   evenness + richness + richness:cluster, 
   correlation = corGaus(1, form = ~x+y),
@@ -116,11 +118,11 @@ best_ml_d <- gls(s1_senes_rate ~ cum_precip_end + diurnal_temp_range +
   data = dat_std, method = "ML")
 
 best_ml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  evenness + richness + richness:cluster, 
+  richness + richness:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
-best_ml_e <- gls(end_lag ~ cum_precip_end + diurnal_temp_range + 
+best_ml_e <- gls(end_lag ~ diurnal_temp_range + 
   richness + richness:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
@@ -190,7 +192,7 @@ names(mod_stat_tab) <- c("Response", "$\\delta$AIC", "$\\delta$BIC", "R\\textsup
 
 fileConn <- file("out/mod_stat.tex")
 writeLines(print(mod_stat_tab, include.rownames = FALSE, 
-    table.placement = "h",
+    table.placement = "H",
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)
