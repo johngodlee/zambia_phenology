@@ -61,13 +61,21 @@
 \def\subsectionautorefname{section}
 \def\subsubsectionautorefname{section}
 
+\newcommand{\beginsupplement}{%
+	\setcounter{table}{0}
+	\renewcommand{\thetable}{S\arabic{table}}%
+	\setcounter{figure}{0}
+	\renewcommand{\thefigure}{S\arabic{figure}}%
+	}
+     
 % Variables
 \input{out/vars.tex}
 
+\newcommand{\titletext}{Phenology and diversity in Zambia}
 
 \begin{document}
 
-{\Large{Title: Phenology and diversity in Zambia}}
+{\Large{Title: \titletext{}}}
 
 Authors: Godlee, J. L.\textsuperscript{1}, 
 
@@ -91,7 +99,9 @@ School of GeoSciences, University of Edinburgh, Edinburgh, United Kingdom
 \newpage{}
 \linenumbers
 
-%{\LARGE{\textbf{Blinded Main Text File}}}
+%Blinded Main Text File
+%Title: \titletext{}
+
 
 \section*{Abstract}
 
@@ -135,7 +145,7 @@ We used plot-level data on tree species diversity across \nSites{} sites from th
 
 Within each plot, the species of all trees with at least one stem $\geq$\stemSize{} cm DBH were recorded. Plot data was aggregated to the site level for analyses to avoid pseudo-replication caused by the more spatially coarse phenology data. Tree species composition varied little among the four plots within a site, and were treated as representative of the woodland in the local area. Using the Bray-Curtis dissimilarity index of species abundance data, we calculated that the mean pairwise compositional distance between plots within a site was lower than the mean compositional distance across all pairs of plots in \plotDistPer{}\% of cases. 
 
-To quantify phenology at each site, we used the MODIS MOD13Q1 satellite data product at 250 m resolution \citep{MOD13Q1}. The MOD13Q1 product provides an Enhanced Vegetation Index (EVI) time series at 16 day intervals. EVI is widely used as a measure of vegetation growth, as an improvement to NDVI (Normalised Differential Vegetation Index), which tends to saturate at higher values. EVI is well-correlated with gross primary productivity and so can act as a suitable proxy \citep{}. We used all scenes from January 2015 to August 2020 with less than 20\% cloud cover covering the study area. All sites were determined to have a single annual growth season according to the MODIS VIPPHEN product \citep{}, which assigns pixels (0.05\textdegree, 5.55 km at equator) up to three growth seasons per year. We stacked yearly data between 2015 and 2020 and fit a General Additive Model (GAM) to produce an average EVI curve. We estimated the start and end of the growing season using the first derivative of the GAM. We identified the start of the growing season as the day where the slope of the curve first exceeds a slope of \modisSLC{}, which is maintained or exceeded for 10 or more days and the end of the growing season as the last day where the slope of the curve falls below -\modisSLC{}, which has been maintained for 10 or more days. We estimated the length of the growing season as the number of days between the start and end of the growing season defined as above. We estimated the green-up rate as the slope of a linear model across EVI values between the start of the growing season and the point at which the slope of increase fell below \modisSLC{}. Similarly the senescence rate was estimated as the slope of a linear model between the point where the slope of decrease fell below -\modisSLC{} and the end of the growing season \autoref{ts_example}.
+To quantify phenology at each site, we used the MODIS MOD13Q1 satellite data product at 250 m resolution \citep{MOD13Q1}. The MOD13Q1 product provides an Enhanced Vegetation Index (EVI) time series at 16 day intervals. EVI is widely used as a measure of vegetation growth, as an improvement to NDVI (Normalised Differential Vegetation Index), which tends to saturate at higher values. EVI is well-correlated with gross primary productivity and so can act as a suitable proxy \citep{}. We used all scenes from January 2015 to August 2020 with less than 20\% cloud cover covering the study area. All sites were determined to have a single annual growth season according to the MODIS VIPPHEN product \citep{}, which assigns pixels (0.05\textdegree, 5.55 km at equator) up to three growth seasons per year. We stacked yearly data between 2015 and 2020 and fit a General Additive Model (GAM) to produce an average EVI curve. We estimated the start and end of the growing season using first derivatives of the GAM. We identified the start of the growing season as the first day where the model slope exceeds a slope of \modisSLC{}, which is maintained or exceeded for 10 or more days. Similarly, we defined the end of the growing season as the end of the latest 10 day period where the model slope is below -\modisSLC{}. We estimated the length of the growing season as the number of days between the start and end of the growing season. We estimated the green-up rate as the slope of a linear model across EVI values between the start of the growing season and the point at which the slope of increase reduces below \modisSLC{}. Similarly the senescence rate was estimated as the slope of a linear model between the point where the slope of decrease fell below -\modisSLC{} and the end of the growing season \autoref{ts_example}. We validated our calculations of cumulative EVI, mean annual EVI, growing season length, season start date, season end date, green-up rate and senescence rate with calculations made by the MODIS VIPPHEN product with linear models comparing the two datasets across our study sites (\autoref{vipphen_compare}, \autoref{annot_df}). Sites where our calculation of a phenological metric was drastically different to the MODIS VIPPHEN estimate were excluded, under the assumption that our algorithm had failed to capture the true value. This removed \vipphenOutlier{} sites.
 
 Precipitation data was gathered using the ``GPM IMERG Final Precipitation L3 1 day V06'' dataset, which has a pixel size of 0.1\textdegree (11.1 km at the equator) \citep{GPM}, between 2015 and 2020. Daily total precipitation was separated into two periods: precipitation during the growing season (growing season precipitation), and precipitation in the 90 day period before the onset of the growing season (dry season precipitation). Similar to estimation of the growing season, the rainy season was defined using the first derivative of a GAM to create a curve for each site using stacked yearly precipitation data. The slope coefficient used to identify the start and end of the rainy season was \trmmSLC{}. Mean diurnal temperature range (Diurnal $\delta$T) was calculated as the mean of monthly temperature range from the WorldClim database, using the BioClim variables, with a pixel size of 30 arc seconds (926 m at the equator) \citep{Fick2017}. averaged across all years of available data (1970-2000).
 
@@ -150,7 +160,9 @@ Precipitation data was gathered using the ``GPM IMERG Final Precipitation L3 1 d
 
 To measure variation in tree species composition we a used combination of Non-symmetric Correspondence Analysis (NSCA) and agglomerative hirerarchical clustering on species abundance data \citep{Kreft2010, Fayolle2014}, and was performed using the \texttt{ade4} R package \citep{ade4}. To guard against sensitivity to rare individuals, which can preclude meaningful cluster delineation across such a large species compositional range, we restricted the NSCA to species with greater than five records, and to sites with fewer than five species \citep{}. We used Ward's algorithm to define clusters \citep{Murtagh2014}, based on the euclidean distance of sites in NSCA ordination space. We determined the optimal number of clusters by maximising the mean silhouette width among clusters \citep{Rousseeuw1987} \autoref{clust_sil}. Vegetation type clusters were used later as interaction terms in linear models. We described the vegetation types represented by each of the clusters using a Dufrene-Legendre indicator species analysis \citep{Dufrene1997}.
 
-We specified multivariate linear models to assess the role of tree species diversity on each of the chosen phenological metrics. We defined tree species diversity using both species richness and abundance evenness as separate independent variables. Abundance evenness was calculated as the Shannon Equitability index ($E_{H'}$) \citep{Smith1996} was calculated as the ratio of the Shannon diversity index to the natural log of species richness. We defined a maximal model structure including tree species richness, abundance evenness, the interaction of species richness and vegetation type, and climatic variables shown by previous studies to strongly influence phenology. The quality of the maximal model was compared to models with different subsets of independent variables using the model log likelihood, AIC (Akaike Information Criteria), BIC (Bayesian Information Criteria), and adjusted R\textsuperscript{2} values for each model. For each phenological metric, the best model according to the model quality statistics is reported in the results. Where two similar models were within 2 AIC points of each other, the model with fewer terms was chosen as the best model, to maximise model parsimony. All models were fitted using Maximum Likelihood to allow comparison of models \citep{}. Independent variables in each model were transformed to achieve normality where necessary and standardised to Z-scores prior to modelling to allow comparison of slope coefficients within a given model. All statistical analyses were conducted in R version 4.0.2 \citep{R2020}.
+We specified multivariate linear models to assess the role of tree species diversity on each of the chosen phenological metrics. We defined tree species diversity using both species richness and abundance evenness as separate independent variables. Abundance evenness was calculated as the Shannon Equitability index ($E_{H'}$) \citep{Smith1996} was calculated as the ratio of the Shannon diversity index to the natural log of species richness. We defined a maximal model structure including tree species richness, abundance evenness, the interaction of species richness and vegetation type, and climatic variables shown by previous studies to strongly influence phenology. The quality of the maximal model was compared to models with different subsets of independent variables using the model log likelihood, AIC (Akaike Information Criteria), BIC (Bayesian Information Criteria), and adjusted R\textsuperscript{2} values for each model. For each phenological metric, the best model according to the model quality statistics is reported in the results. Where two similar models were within 2 AIC points of each other, the model with fewer terms was chosen as the best model, to maximise model parsimony. All models were fitted using Maximum Likelihood (ML) to allow comparison of models \citep{}. The best model was subsequently re-fitted using Restricted Maximum Likelihood for model effect estimation (REML). Independent variables in each model were transformed to achieve normality where necessary and standardised to Z-scores prior to modelling to allow comparison of slope coefficients within a given model. 
+
+We used the \texttt{ggeffects} package to estimate the marginal means of the interaction effect of species richness and vegetation type, to investigate vegetation type specific effects on each phenological metric \citep{ggefects}. Estimated marginal means entails generating model predictions across values of a focal variable, in this case species richness, while holding non-focal variables constant. All statistical analyses were conducted in R version 4.0.2 \citep{R2020}.
 
 \section{Results}
 
@@ -206,13 +218,40 @@ The ability for us now nearing to be able to remotely sense tree species diversi
 
 It's possible that the reason we couldn't predict season length well is that there is very little variation between sites. Notably, only cluster three deviates from the density distribution of the other two clusters, with more sites at the lower end of the distribution. Cluster 3 also differed in significantly in senescence rate from the other two clusters, with many more plots showing a very steep senescence rate. Interestingly, Cluster three had wider variation in cumulative EVI than the other clusters and this is reflected in the marginal effects of species richness on these phenological metrics. Species richness had a greater effect on cumulative EVI than the other two clusters, and led to a steeper senescence rate.. \todo{WHYTHO?}
 
+Important to note that the EVI measurements don't refer only to trees, they are the whole ecosystem. But I don't think that makes the results less important or valid.
+
 \section{Conclusion}
 
 \printbibliography
 
-\section{Supplementary material}
+\section{Supplementary Material}
+\beginsupplement
+
+\begin{figure}[H]
+\centering
+	\includegraphics[width=\textwidth]{vipphen_compare}
+	\caption{}
+	\label{vipphen_compare}
+\end{figure}
+
+\input{out/vipphen_compare.tex}
 
 \input{out/all_mod_sel.tex}
+
+\begin{figure}[H]
+\centering
+	\includegraphics[width=\textwidth]{img/clust_sil.pdf}
+	\caption{}
+	\label{clust_sil}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+	\includegraphics[width=\textwidth]{img/clust_dendro.pdf}
+	\caption{}
+	\label{clust_dendro}
+\end{figure}
+
 
 \end{document}
 

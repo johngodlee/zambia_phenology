@@ -12,6 +12,8 @@ library(zoo)
 library(lubridate)
 library(mgcv)  # gam()
 library(gratia)  # derivatives()
+library(xtable)
+library(RcppRoll)
 
 source("functions.R")
 
@@ -20,8 +22,12 @@ dat <- readRDS("dat/plots.rds")
 vipphen <- readRDS("dat/vipphen.rds")
 evi_ts_df <- readRDS("dat/evi.rds")
 
+# Clean raw ts
+evi_ts_clean <- evi_ts_df %>%
+  filter(evi > 0)
+
 # Decompose annual time series - at September, with 2 month overlap on both ends
-evi_ts_list <- split(evi_ts_df, evi_ts_df$plot_cluster)
+evi_ts_list <- split(evi_ts_clean, evi_ts_clean$plot_cluster)
 
 evi_seas_list <- lapply(evi_ts_list, function(x) {
   list(
@@ -66,68 +72,118 @@ phen_df <- data.frame(plot_cluster = names(gam_list))
 
 # Max and min EVI
 phen_df$max_vi <- unlist(lapply(gam_list, function(x) {max(x[[2]][1:355, "pred"])}))
+phen_df$max_vi_date <- unlist(lapply(gam_list, function(x) {
+    x[[2]][which.max(x[[2]][1:355, "pred"]), "doy"]
+  }))
 phen_df$min_vi <- unlist(lapply(gam_list, function(x) {min(x[[2]][1:355, "pred"])}))
 
-# Define change in slope parameter
-slc <- 0.05
+# Start of growing season
+win_len <- 20
 
-# Start and end of growing season
 ##' Using first derivatives of GAM
-##' Start = slope first +5
-##' End = slope last -5
-phen_df$s1_start <- unlist(lapply(gam_list, function(x) {
-  mod <- x[[1]] 
+##' Filter to before max EVI
+##' First rolling period where positive slope of GAM exceeds 50% of max slope
+phen_df$s1_start <- unlist(lapply(seq(length(gam_list)), function(x) {
+  # Extract mod and predicted values
+  mod <- gam_list[[x]][[1]] 
+  pred <- gam_list[[x]][[2]]
+  
+  # First derivative
+  der <- as.data.frame(derivatives(mod, type = "forward", 
+      newdata = data.frame(doy = pred_data)))
 
-  der <- derivatives(mod, type = "forward")
+  # Filter to before max VI
+  max_date <- pred[pred$pred == phen_df[x, "max_vi"], "doy"]
+  der_fil <- der[der$data < max_date, c(3,4)]
 
-  der_fil <- der[der$data > -175,]
+  # Find rolling period minimum slopes
+  roll <- roll_min(der_fil$derivative, n = win_len, by = 1, align = "left", fill = NA)
 
-  round(pull(der_fil[which(der_fil$derivative >= slc), "data"])[1])
+  # Find 50% of max slope
+  max_slope_half <- max(der_fil$derivative) * 0.5
+
+  # Find first rolling period where all slope exceed 50% of max slope
+  sos <- der_fil[roll >= max_slope_half, "data"][1]
+
+  return(sos)
 }))
 
-phen_df$s1_end <- unlist(lapply(gam_list, function(x) {
-  mod <- x[[1]] 
+# End of growing season
 
-  der <- derivatives(mod, type = "backward")
+##' Using first derivatives of GAM
+##' Filter to after max EVI
+##' Final 1 day period where negative slope of GAM exceeds 50% of GAM
+phen_df$s1_end <- unlist(lapply(seq(length(gam_list)), function(x) {
+  mod <- gam_list[[x]][[1]] 
+  pred <- gam_list[[x]][[2]]
 
-  der_fil <- der[der$data < 250,]
+  # First derivative
+  der <- as.data.frame(derivatives(mod, type = "backward", 
+      newdata = data.frame(doy = pred_data)))
 
-  round(last(pull(der_fil[which(der_fil$derivative <= -slc), "data"])))
+  # Filter to after max VI
+  max_date <- pred[pred$pred == phen_df[x, "max_vi"], "doy"]
+  der_fil <- der[der$data > max_date, c(3,4)]
+
+  # Find rolling period maximum slopes
+  roll <- roll_max(der_fil$derivative, n = win_len, by = 1, align = "right", fill = NA)
+
+  # Find 50% of min slope
+  min_slope_half <- min(der_fil$derivative) * 0.5
+
+  # Find last rolling period where all slope below 50% of min slope
+  eos <- der_fil[roll <= min_slope_half , "data"]
+  eos <- eos[length(eos)]
+
+  return(eos)
 }))
 
 # Season length
 ##' Days between start and end
 phen_df$s1_length <- phen_df$s1_end - phen_df$s1_start
 
+# Remove bogus values 
+phen_df_fil <- phen_df %>%
+  filter(s1_start > -200,
+    s1_end < 300,
+    s1_length < 500,
+    max_vi > 1000, 
+    min_vi > 500)
+gam_list_fil <- gam_list[names(gam_list) %in% unique(phen_df_fil$plot_cluster)]
+
 # Subset GAM predicted values to within start and end of season
-gam_fil <- lapply(seq(length(gam_list)), function(x) {
-  mod <- gam_list[[x]][[2]]
-  mod[mod$doy >= phen_df[x, "s1_start"] & mod$doy <= phen_df[x, "s1_end"],]
+gam_fil <- lapply(seq(length(gam_list_fil)), function(x) {
+  mod <- gam_list_fil[[x]][[2]]
+  mod[mod$doy >= phen_df_fil[x, "s1_start"] & mod$doy <= phen_df_fil[x, "s1_end"],]
 })
 
 # Average VI 
 ##' Mean of all values within growing season
-phen_df$avg_vi <- unlist(lapply(gam_fil, function(x) {mean(x[["pred"]])}))
+phen_df_fil$avg_vi <- unlist(lapply(gam_fil, function(x) {mean(x[["pred"]])}))
 
 # Greening rate (s1_green_rate)
-##' First +5 to second +5
-
-s1_greenup_mod_list <- lapply(seq(length(gam_list)), function(x) {
-  mod <- gam_list[[x]][[1]]
-  pred <- gam_list[[x]][[2]]
+##' Using first derivatives of GAM
+##' Filter to before max EVI
+##' First rolling period where positive slope of GAM exceeds 50% of max slope
+s1_greenup_mod_list <- lapply(seq(length(gam_list_fil)), function(x) {
+  mod <- gam_list_fil[[x]][[1]]
+  pred <- gam_list_fil[[x]][[2]]
 
   # Get first derivative of gam
-  der <- as.data.frame(derivatives(mod))
+  der <- as.data.frame(derivatives(mod, newdata = data.frame(doy = pred_data)))
 
-  # Filter first derivative to within season
-  der_fil <- der[der$data >= phen_df[x, "s1_start"] & 
-    der$data <= phen_df[x, "s1_end"],] 
+  # Filter first derivative to within greening period
+  der_fil <- der[der$data >= phen_df_fil[x, "s1_start"] & 
+    der$data <= phen_df_fil[x, "max_vi_date"], c(3,4)] 
+
+  # find 50% max slope
+  max_slope_half <- max(der_fil$derivative) * 0.5
 
   # Define start of greening period
   doy_green_start <- round(der_fil[1, "data"])
 
   # Define end of greening period
-  doy_green_end <- first(der_fil[der_fil$derivative <= slc, "data"])
+  doy_green_end <- first(der_fil[der_fil$derivative <= max_slope_half, "data"])
   
   # Subset gam predicted values
   pred_green <- pred[pred$doy >= doy_green_start & pred$doy <= doy_green_end,]
@@ -149,26 +205,30 @@ s1_greenup_mod_list <- lapply(seq(length(gam_list)), function(x) {
   list(mod = mod_green, slope = slope)
 })
 
-phen_df$s1_green_rate <- unlist(lapply(s1_greenup_mod_list, `[[`, 2))
+phen_df_fil$s1_green_rate <- unlist(lapply(s1_greenup_mod_list, `[[`, 2))
 
 # Senescence rate (s1_senes_rate)
 ##' Second to last -5 to last -5 
-s1_senes_mod_list <- lapply(seq(length(gam_list)), function(x) {
-  mod <- gam_list[[x]][[1]]
-  pred <- gam_list[[x]][[2]]
+s1_senes_mod_list <- lapply(seq(length(gam_list_fil)), function(x) {
+  mod <- gam_list_fil[[x]][[1]]
+  pred <- gam_list_fil[[x]][[2]]
 
   # Get first derivative of gam
-  der <- as.data.frame(derivatives(mod))
+  der <- as.data.frame(derivatives(mod, newdata = data.frame(doy = pred_data)))
 
-  # Filter first derivative to within season
-  der_fil <- der[der$data > phen_df[x, "s1_start"] & 
-    der$data < phen_df[x, "s1_end"],] 
+  # Filter first derivative to within senescence period
+  der_fil <- der[der$data >= phen_df_fil[x, "max_vi_date"] & 
+    der$data < phen_df_fil[x, "s1_end"],] 
 
-  # Define start of senescence period
-  doy_senes_start <- last(der_fil[der_fil$derivative >= -slc, "data"])
+  # find 50% min slope
+  min_slope_half <- min(der_fil$derivative) * 0.5
 
   # Define end of senescence period
-  doy_senes_end <- round(der_fil[nrow(der_fil), "data"])
+  doy_senes_end <- der_fil[nrow(der_fil), "data"]
+
+  # Define start of senescence period
+  # First time where slope dips below half max negative slope
+  doy_senes_start <- der_fil[der_fil$derivative <= min_slope_half, "data"][1]
 
   # Subset gam predicted values
   pred_senes <- pred[pred$doy >= doy_senes_start & pred$doy <= doy_senes_end,]
@@ -187,21 +247,19 @@ s1_senes_mod_list <- lapply(seq(length(gam_list)), function(x) {
     slope <- unname(mod_senes$coefficients[2])
   }
   
-
   list(mod = mod_senes, slope = slope)
 })
 
-phen_df$s1_senes_rate <- unlist(lapply(s1_senes_mod_list, `[[`, 2))
+phen_df_fil$s1_senes_rate <- unlist(lapply(s1_senes_mod_list, `[[`, 2))
 
 # Cumulative VI 
 ##' Area under curve between start and end, minus minimum
-phen_df$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
-  gam_min <- gam_fil[[x]][["pred"]] - phen_df[x, "min_vi"] 
-  sum(diff(gam_fil[[x]][["doy"]])*rollmean(gam_min,2))
+phen_df_fil$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
+  sum(diff(gam_fil[[x]][["doy"]]) * rollmean(gam_fil[[x]][["pred"]], 2))
 }))
 
 phen_all <- dat %>%
-  left_join(., phen_df, by = "plot_cluster") %>%
+  left_join(., phen_df_fil, by = "plot_cluster") %>%
   left_join(., vipphen, by = "plot_cluster") %>%
   filter(vipphen_n_seasons < 2) %>%
   dplyr::select(-vipphen_n_seasons) %>%
@@ -227,14 +285,14 @@ stat_plot <- function(x, raw = FALSE) {
 
   if (raw) {
     evi_raw <- evi_clean %>% 
-      filter(plot_cluster == names(gam_list[x]))
+      filter(plot_cluster == names(gam_list_fil[x]))
 
     p <- p + geom_path(data = evi_raw, aes(x = doy, y = evi, group = season),
       alpha = 0.5) 
   }
 
   p <- p + 
-    geom_path(data = gam_list[[x]][[2]], aes(x = doy, y = pred), size = 1.5) + 
+    geom_path(data = gam_list_fil[[x]][[2]], aes(x = doy, y = pred), size = 1.5) + 
     geom_path(data = gam_fil[[x]], aes(x = doy, y = pred), 
       colour = pal[1], size = 1.5)
 
@@ -247,16 +305,19 @@ stat_plot <- function(x, raw = FALSE) {
       size = 2, linetype = "dotdash", colour = pal[2]) 
   }
   p + 
-    geom_vline(xintercept = gam_list[[x]][[2]][which(gam_list[[x]][[2]][["pred"]] == phen_df[x, "max_vi"]), "doy"], colour = pal[4]) + 
-    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list[x]), "s1_start"]) %>% pull(), colour = "green") + 
-    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list[x]), "s1_end"]) %>% pull(), colour = "blue") + 
+    geom_vline(xintercept = gam_list_fil[[x]][[2]][which(gam_list_fil[[x]][[2]][["pred"]] == phen_df_fil[x, "max_vi"]), "doy"], colour = pal[4]) + 
+    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_fil[x]), "s1_start"]) %>% pull(), colour = "green") + 
+    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_fil[x]), "s1_end"]) %>% pull(), colour = "blue") + 
     theme_panel() + 
     labs(x = "Days from 1st Jan.", y = "EVI") + 
-    ggtitle(names(gam_list[x]))
+    ggtitle(names(gam_list_fil[x]))
 }
 
-sam <- sample(seq(length(gam_list)), 50)
+sam <- sample(seq(length(gam_list_fil)), 50)
 ts_stat_plot_list <- lapply(sam, stat_plot) 
+
+stat_plot(which(names(gam_list) == "ZIS_3123"), raw = TRUE)
+stat_plot(which(names(gam_list) == "ZIS_2774"), raw = TRUE)
 
 pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)
 grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
@@ -271,13 +332,6 @@ ts_example_plot +
     axis.title = element_text(size = 12))
 dev.off()
 
-# Write data 
-saveRDS(phen_all, "dat/plots_phen.rds")
-
-write(
-  commandOutput(slc, "modisSLC"),
-  file = "out/modis_extract_vars.tex")
-
 # Compare VIPPHEN and 250 m
 old_gather <- phen_all %>%
   st_drop_geometry() %>%
@@ -291,17 +345,75 @@ compare <- phen_all %>%
   gather(key, new, -plot_cluster) %>%
   left_join(., old_gather, by = c("plot_cluster", "key")) %>%
   filter(!key %in% c("min_vi", "max_vi"), 
-  !(old < 150 & key == "s1_start"))
+  !(old < 150 & key == "s1_start")) %>%
+  mutate(key_clean = factor(key, 
+      levels = c("avg_vi", "cum_vi", "s1_start", "s1_end", 
+        "s1_length", "s1_green_rate", "s1_senes_rate"),
+      labels = c("Mean EVI", "Cumulative EVI", "Season start", "Season end",
+        "Season length", "Green-up rate", "Senescence rate")))
+  
+excl <- unique(unname(unlist(list(
+  compare[compare$old < 1000 & compare$key == "avg_vi","plot_cluster"],
+  compare[compare$old < 600 & compare$key == "cum_vi","plot_cluster"],
+  compare[compare$new < 100 & compare$key == "s1_end","plot_cluster"],
+  compare[compare$old < 200 & compare$key == "s1_start","plot_cluster"],
+  compare[compare$new < 150 & compare$key == "s1_length","plot_cluster"],
+  compare[compare$new > 75 & compare$key == "s1_green_rate","plot_cluster"],
+  compare[compare$old > 3000 & compare$key == "s1_senes_rate", "plot_cluster"]))))
 
-pdf(file = "img/old_new_compare.pdf", width = 12, height = 8)
+compare_clean <- compare %>%
+  filter(!plot_cluster %in% excl)
+
+compare_list <- split(compare_clean, compare_clean$key_clean)
+
+annot_df <- do.call(rbind, lapply(compare_list, function(x) {
+  mod <- lm(new ~ old, data = x)
+  summ <- summary(mod)
+  pval <- anova(mod)[1,5]
+  r2 <- summ$r.squared
+  fstat <- summ$fstatistic
+  f <- round(fstat[1], 1)
+  pfmt <- case_when(
+      pval <= 0.05 ~ "p<0.05",
+      pval <= 0.01 ~ "p<0.01",
+      pval <= 0.001 ~ "p<0.001",
+      TRUE ~ paste0("p=", as.character(round(pval, 2))))
+  annot <- bquote(R^2~round(r2, 2))
+  data.frame(key_clean = unique(x$key_clean), dof = fstat[3], f, pfmt, r2)
+  }))
+
+annot_xtable <- xtable(annot_df, 
+  label = "annot_df",
+  align = "rrrrrr",
+  display = c("s", "s", "f", "f", "s", "f"),
+  digits = c(0, 0, 0, 1, 0, 2),
+  caption = "Model fit statistics for comparison of MODIS VIPPHEN and MOD13Q1 products across each of our study sites.")
+names(annot_xtable) <- c("Response", "DoF", "F", "Prob.", "R\\textsuperscript{2}")
+
+fileConn <- file("out/vipphen_compare.tex")
+writeLines(print(annot_xtable, include.rownames = FALSE, 
+    table.placement = "h",
+    sanitize.text.function = function(x) {x}), 
+  fileConn)
+close(fileConn)
+  
+pdf(file = "img/vipphen_compare.pdf", width = 12, height = 8)
 ggplot() + 
-  geom_point(data = compare, aes(x = old, y = new), 
+  geom_point(data = compare_clean, aes(x = old, y = new), 
     alpha = 0.8, colour = "black", fill = pal[5], shape = 21) + 
-  geom_smooth(data = compare, aes(x = old, y = new), 
+  geom_smooth(data = compare_clean, aes(x = old, y = new), 
     method = "lm", colour = pal[1]) + 
-  facet_wrap(~key, scales = "free") + 
+  facet_wrap(~key_clean, scales = "free") + 
   theme_panel() + 
   labs(x = "MODIS VIPPHEN", y = "MOD13Q1")
 dev.off()
 
+# Write data 
+saveRDS(phen_all, "dat/plots_phen.rds")
 
+write(
+  c(
+    commandOutput(win_len, "modisWin"),
+    commandOutput(length(excl), "vipphenOutlier")
+  ),
+  file = "out/modis_extract_vars.tex")

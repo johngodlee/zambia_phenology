@@ -10,3 +10,5 @@ sed '9s/^1\s\&/\\multirow{3}{*}{1} \&/g' out/indval.tex |\
 	sed '17s/^3\s\&/\\multirow{3}{*}{3} \&/g' |\
 	sed '18s/^\s\+3\s\&/\&/g' |\
 	sed '19s/^\s\+3\s\&/\&/g' > out/indval_fmt.tex
+
+# 
