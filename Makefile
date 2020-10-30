@@ -28,7 +28,7 @@ $(DATDIR)/plots_trmm.rds $(OUTDIR)/trmm_extract_vars.tex : trmm_extract.R functi
 	Rscript $<
 
 # Diversity
-$(DATDIR)/plots_div.rds $(OUTDIR)/indval.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_trmm.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/stems_latest_v2.7.csv
+$(DATDIR)/plots_div.rds $(OUTDIR)/clust_summ.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_trmm.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/stems_latest_v2.7.csv
 	Rscript $<
 
 # Analysis prep
@@ -48,7 +48,7 @@ $(IMGDIR)/schematic.pdf : drawio/schematic.drawio
 	./drawio_export.sh $< $@
 
 # Format some tables
-$(OUTDIR)/indval_fmt.tex $(OUTDIR)/all_mod_sel_fmt.tex : $(OUTDIR)/indval.tex $(OUTDIR)/all_mod_sel.tex 
+$(OUTDIR)/all_mod_sel_fmt.tex : $(OUTDIR)/all_mod_sel.tex 
 	./table_fmt.sh $< $@
 
 # Compile main tex file and show errors
@@ -62,7 +62,7 @@ $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(IMGDIR)/schematic.pdf\
 	$(IMGDIR)/phen_dens_clust.pdf\
 	$(OUTDIR)/all_mod_sel.tex\
-	$(OUTDIR)/indval_fmt.tex
+	$(OUTDIR)/clust_summ.tex
 	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make -bibtex $<
 
 # Only run time series data getting

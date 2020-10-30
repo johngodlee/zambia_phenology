@@ -267,7 +267,7 @@ phen_all <- dat %>%
   filter(!is.na(s1_start))
 
 # Make a plot which demonstrates all the different numeric phenology stats
-stat_plot <- function(x, raw = FALSE) {
+stat_plot <- function(x, raw = FALSE, title = TRUE) {
   # Predict values of greenup and senescence rate
   if (class(s1_greenup_mod_list[[x]][[1]]) == "lm") {
   greenup_pred <- predict(s1_greenup_mod_list[[x]][[1]])
@@ -304,13 +304,18 @@ stat_plot <- function(x, raw = FALSE) {
     p <- p + geom_path(data = senes_pred_df, aes(x = doy, y = pred), 
       size = 2, linetype = "dotdash", colour = pal[2]) 
   }
-  p + 
+  p <- p + 
     geom_vline(xintercept = gam_list_fil[[x]][[2]][which(gam_list_fil[[x]][[2]][["pred"]] == phen_df_fil[x, "max_vi"]), "doy"], colour = pal[4]) + 
     geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_fil[x]), "s1_start"]) %>% pull(), colour = "green") + 
     geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_fil[x]), "s1_end"]) %>% pull(), colour = "blue") + 
     theme_panel() + 
-    labs(x = "Days from 1st Jan.", y = "EVI") + 
-    ggtitle(names(gam_list_fil[x]))
+    labs(x = "Days from 1st Jan.", y = "EVI") 
+
+  if (title) { 
+    p <- p + ggtitle(names(gam_list_fil[x]))
+  }
+
+  p
 }
 
 sam <- sample(seq(length(gam_list_fil)), 50)
@@ -324,7 +329,7 @@ grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
 dev.off()
 
 # Example plot on its own
-ts_example_plot <- stat_plot(598, raw = TRUE)
+ts_example_plot <- stat_plot(598, raw = TRUE, title = FALSE)
 
 pdf(file = "img/ts_example.pdf", width = 8, height = 6)
 ts_example_plot + 
@@ -384,7 +389,7 @@ annot_df <- do.call(rbind, lapply(compare_list, function(x) {
 
 annot_xtable <- xtable(annot_df, 
   label = "annot_df",
-  align = "rrrrrr",
+  align = "rrcccc",
   display = c("s", "s", "f", "f", "s", "f"),
   digits = c(0, 0, 0, 1, 0, 2),
   caption = "Model fit statistics for comparison of MODIS VIPPHEN and MOD13Q1 products across each of our study sites.")

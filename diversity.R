@@ -224,23 +224,45 @@ indval_extrac_tidy <- do.call(rbind, lapply(indval_extrac, function(x) {
     cluster <- names(x)[2]
     out <- x[1:3,]
     out$cluster <- cluster
-    names(out) <- c("Species", "Indicator value", "Cluster")
+    names(out) <- c("species", "indval", "cluster")
     out[,c(3,1,2)]
   })
 )
 
+# Get species richness for each cluster +/- IQR
+# Get number of sites
+# Get MAP mean and Diurnal dT mean
+clust_summ <- div %>%
+  st_drop_geometry()%>%
+  group_by(cluster) %>%
+  summarise(richness_median = median(richness, na.rm = TRUE),
+    richness_iqr = (quantile(richness, 0.75) - quantile(richness, 0.25)),
+    n_sites = as.character(n()),
+    map_mean = mean(map, na.rm = TRUE),
+    map_sd = sd(map, na.rm = TRUE),
+    diurnal_dt_mean = mean(diurnal_temp_range, na.rm = TRUE),
+    diurnal_dt_sd = sd(diurnal_temp_range, na.rm = TRUE)) %>%
+  mutate(richness = paste0(sprintf("%.0f", richness_median), "(", sprintf("%.0f", richness_iqr), ")"),
+    map = paste0(sprintf("%.0f", map_mean), "(", sprintf("%.1f", map_sd), ")"),
+    diurnal_dt = paste0(sprintf("%.0f", diurnal_dt_mean), "(", sprintf("%.1f", diurnal_dt_sd), ")")) %>%
+  dplyr::select(cluster, n_sites, richness, map, diurnal_dt) %>%
+  left_join(., indval_extrac_tidy, by = "cluster") %>%
+  mutate(species = paste0("\\textit{", species, "}"),
+  indval = sprintf("%.3f", indval))
+
+clust_summ[c(1,3,4,6,7,9),c(1,2,3,4,5)] <- ""
+
+names(clust_summ) <- c("Cluster", "N sites", "Richness", "MAP", "Diurnal $\\delta$T", "Species", "Indicator value")
+
 # Export indval table
-indval_extrac_tidy$Species <- paste0("\\textit{", indval_extrac_tidy$Species, "}")
+clust_summ_xtable <- xtable(clust_summ, 
+  label = "clust_summ",
+  align = rep("c", 8),
+  display = rep("s", 8),
+  caption = "Climatic information and Dufrene-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm. The three species per cluster with the highest indicator values are shown along with other key statistics for each cluster. MAP (Mean Annual Precipitation) and Diurnal $\\delta$T are reported as the mean and 1 standard deviation in parentheses. Species richness is reported as the median and the interquartile range in parentheses.")
 
-indval_xtable <- xtable(indval_extrac_tidy, 
-  label = "indval",
-  digits = 3,
-  align = c("c", "c", "c", "c"),
-  display = c("s", "s", "s", "f"),
-  caption = "Legendre indicator species analysis for the four vegetation type clusters identified by the PAM algorithm.")
-
-fileConn <- file("out/indval.tex")
-writeLines(print(indval_xtable, include.rownames = FALSE,
+fileConn <- file("out/clust_summ.tex")
+writeLines(print(clust_summ_xtable, include.rownames = FALSE,
     table.placement = "H",
     hline.after = c(-1,0,seq(from = 3, by = 3, length.out = n_clusters-1)),
     sanitize.text.function = function(x) {x}), 
@@ -289,6 +311,12 @@ plot_dist_mean_clean <- plot_dist_mean[!is.na(plot_dist_mean)]
 plot_dist_per <- round(length(which(plot_dist_mean_clean < plot_dist_all_mean)) / 
   length(plot_dist_mean_clean) * 100, 1)
 
+# How many plots are in each cluster?
+clust_tally <- div %>% 
+  count(cluster) %>% 
+  st_drop_geometry() %>%
+  pull(n)
+
 write(
   c(
     commandOutput(plot_dist_per, "plotDistPer"),
@@ -297,7 +325,10 @@ write(
     commandOutput(naxes, "nscaAxes"),
     commandOutput(stems_ha, "stemsHa"),
     commandOutput(stem_size, "stemSize"),
-    commandOutput(n_clusters, "nCluster")
+    commandOutput(n_clusters, "nCluster"),
+    commandOutput(clust_tally[1], "nClusterA"),
+    commandOutput(clust_tally[2], "nClusterB"),
+    commandOutput(clust_tally[3], "nClusterC")
     ),
   file = "out/diversity_vars.tex")
 
