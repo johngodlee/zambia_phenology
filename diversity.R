@@ -38,53 +38,55 @@ mopane_per <- 0.5
 stems_ha <- 50
 stem_size <- 10
 
-tree_ab_mat_plot <- stems_fil %>% 
-  dplyr::select(plot_id, tree_id, species_name_clean) %>%  # Select columns
-  filter(!is.na(species_name_clean)) %>%  # Remove stems with no species
-  group_by(plot_id, tree_id) %>%  # Group by plot and tree ID
-  filter(row_number() == 1) %>%  # Remove duplicated tree measurements
-  group_by(plot_id, species_name_clean, .drop = FALSE) %>%
-  tally() %>%
-  spread(species_name_clean, n, fill = 0) %>%
-  ungroup() %>%
-  mutate_at(vars(-plot_id), as.double) %>%
-  as.data.frame() %>%
-  dplyr::select(-`Indet indet`) %>%  # Remove stems with no species
-  column_to_rownames("plot_id")
+# Summarise to only trees
+# Remove duplicated tree measurements
+tree_fil <- stems_fil %>%
+  filter(!is.na(species_name_clean)) %>%
+  group_by(plot_id, tree_id) %>%
+  filter(row_number() == 1) %>%  
+  summarise(
+    plot_cluster = first(na.omit(plot_cluster)),
+    species_name_clean = first(na.omit(species_name_clean)),
+    diam = sum(diam, na.rm = TRUE),
+    ba = sum(ba, na.rm = TRUE),
+    agb = sum(agb, na.rm = TRUE))
+
+# Create tree species abundance matrix by plot 
+tree_ab_mat_plot <- abMat(tree_fil, site_id = "plot_id", 
+  species_id = "species_name_clean", abundance = "ba") 
 
 # Create tree species abundance matrix by plot cluster
-tree_ab_mat_clust <- stems_fil %>% 
-  dplyr::select(plot_cluster, tree_id, species_name_clean) %>%
-  filter(!is.na(species_name_clean)) %>%
-  group_by(plot_cluster, tree_id) %>%
-  filter(row_number() == 1) %>%
-  group_by(plot_cluster, species_name_clean, .drop = FALSE) %>%
-  tally() %>%
-  spread(species_name_clean, n, fill = 0) %>%
-  ungroup() %>%
-  mutate_at(vars(-plot_cluster), as.double) %>%
-  as.data.frame() %>%
-  dplyr::select(-`Indet indet`) %>%
-  column_to_rownames("plot_cluster") %>%
-  filter_all(any_vars(. != 0)) %>%
-  filter(rowSums(.) / 
-    (pull(st_drop_geometry(
-      plots[plots$plot_cluster %in% row.names(.), "plot_id_length"]
-      )) * 0.1) > stems_ha) %>%  # Remove plots with fewer than x stems ha
-  filter((.$`Colophospermum mopane` / rowSums(.)) < mopane_per)  # Filter mopane plots
+tree_ab_mat_clust <- abMat(tree_fil, site_id = "plot_cluster", 
+  species_id = "species_name_clean", abundance = "ba") 
+
+# Occurrence only version for filtering
+tree_occ_clust <- abMat(tree_fil, site_id = "plot_cluster", 
+  species_id = "species_name_clean", abundance = NULL)
+
+# Filter abundance matrix
+# Remove plots with fewer than 5 species with more than 1 individual
+ab_mat_clean <- tree_ab_mat_clust[ unname(apply(tree_occ_clust, 1, function(x) { 
+    sum(x > 1, na.rm = TRUE) 
+  })) >= 5,]  
+
+# Remove species with less than 5 occurrences across dataset
+ab_mat_clean <- ab_mat_clean[,colSums(tree_occ_clust) > 5]  
+
+# Remove plots with no individuals
+ab_mat_clean <- ab_mat_clean[rowSums(ab_mat_clean) != 0,]  
+
+# Exclude species which are clearly non-native
+ab_mat_clean <- ab_mat_clean %>%
+  dplyr::select(-starts_with("Pinus"), -starts_with("Eucalyptus")) 
 
 # Remove plots not in tree abundance matrix
-plots_clean <- filter(plots, plot_cluster %in% rownames(tree_ab_mat_clust))
+plots_clean <- plots[plots$plot_cluster %in% rownames(ab_mat_clean),]
 tree_ab_mat_plot_clean <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% 
   unlist(plots_clean$plot_id_vec),]
 
 # Write tree abundance matrices
-saveRDS(tree_ab_mat_clust, "dat/tree_ab_mat.rds")
-saveRDS(tree_ab_mat_plot, "dat/tree_ab_mat_plot.rds")
-
-# Exclude species which are clearly non-native
-ab_mat_clean <- tree_ab_mat_clust %>%
-  dplyr::select(-starts_with("Pinus"), -starts_with("Eucalyptus")) 
+saveRDS(ab_mat_clean, "dat/tree_ab_mat.rds")
+saveRDS(tree_ab_mat_plot_clean, "dat/tree_ab_mat_plot.rds")
 
 # Calculate common  diversity statistics
 div_df <- data.frame(plot_cluster = row.names(ab_mat_clean), 
@@ -93,19 +95,9 @@ div_df <- data.frame(plot_cluster = row.names(ab_mat_clean),
   simpson = diversity(ab_mat_clean, "simpson"),
   evenness = diversity(ab_mat_clean) / log(rowSums(ab_mat_clean > 0)))
 
-# Filter abundance matrix
-# Remove plots with fewer than 5 species with more than 1 individual
-ab_mat_fil <- ab_mat_clean[
-  unname(apply(ab_mat_clean, 1, function(x) { sum(x > 1, na.rm = TRUE) })) >= 5,]  
-ab_mat_fil <- ab_mat_fil[rowSums(ab_mat_fil) != 0,]  # Remove plots with no individuals
-ab_mat_fil <- ab_mat_fil[,colSums(ab_mat_fil) > 5]  # Remove species with less than 5 occurrences
-
-plots_fil <- plots_clean %>%
-  filter(plot_cluster %in% row.names(ab_mat_fil))
-
 # NSCA on species abundance
-naxes <- 2
-nsca <- dudi.nsc(df = ab_mat_fil, scannf = FALSE, nf = naxes)
+naxes <- 4
+nsca <- dudi.nsc(df = ab_mat_clean, scannf = FALSE, nf = naxes)
 
 nsca_inertia <- round(nsca$eig[naxes+1], 2)*10
 
@@ -191,15 +183,16 @@ nscaPlot <- function(x,y, dat = nsc_df) {
   return(p)
 }
 
-pdf(file = "img/nsca.pdf", width = 8, height = 6)
+pdf(file = "img/nsca.pdf", width = 12, height = 6)
 nscaPlot(RS1, RS2) +
+nscaPlot(RS1, RS3) + 
   plot_layout(guides = "collect", widths = 1) &
   scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
     limits = unique(nsc_df$cluster))
 dev.off()
 
 # Add values to data
-div <- plots_fil %>%
+div <- plots_clean %>%
   left_join(., div_df, by = "plot_cluster")  %>%
   left_join(., clust_df, by = "plot_cluster") 
 
@@ -207,7 +200,7 @@ div <- plots_fil %>%
 saveRDS(div, "dat/plots_div.rds") 
 
 # Indicator species per cluster
-clust_indval <- indval(ab_mat_fil, clustering = div$cluster)
+clust_indval <- indval(ab_mat_clean, clustering = div$cluster)
 
 # Summarise indicator analysis
 summary(clust_indval, p = 0.05, type = "short", digits = 2, show = p)

@@ -334,3 +334,72 @@ seasonGet <- function(x, min_date, max_date, date = "date") {
     
   return(out)
 }
+
+#' Generate a species by site abundance matrix
+#'
+#' @param x dataframe of individual records
+#' @param site_id column name string of site IDs
+#' @param species_id column name string of species names
+#' @param fpc optional column name string of sampling weights of each record, 
+#'     between 0 and 1 
+#' @param abundance optional column name string with an alternative abundance 
+#'     measure such as biomass, canopy cover, body length
+#'
+#' @return dataframe of species abundances (columns) per site (rows)
+#' 
+#' @examples
+#' x <- data.frame(site_id = rep(c("A", "B", "C"), each = 3), 
+#'   species_id = sample(c("a", "b", "c", "d"), 9, replace = TRUE), 
+#'   fpc = rep(c(0.5, 0.6, 1), each = 3), 
+#'   abundance = seq(1:9))
+#' abMat(x, "site_id", "species_id")
+#' abMat(x, "site_id", "species_id", "fpc")
+#' abMat(x, "site_id", "species_id", "fpc", "abundance")
+#' 
+#' @export
+#' 
+abMat <- function(x, site_id, species_id, fpc = NULL, abundance = NULL) {
+  # If no fpc or abundance, make 1
+  if (is.null(fpc)) {
+    x$fpc <- 1
+  } else {
+  	x$fpc <- x[[fpc]]
+  }
+  if (is.null(abundance)) {
+    x$abundance <- 1 
+  } else {
+  	x$abundance <- x[[abundance]]
+  }
+
+  x$abundance <- x$abundance / x$fpc
+
+  # Count number of species and sites
+  comm_df <- aggregate(x$abundance, by = list(x[[site_id]], x[[species_id]]), 
+    simplify = FALSE, drop = FALSE, FUN = sum)
+
+  # Replace NULL with zero
+  comm_df$x <- unlist(lapply(comm_df$x, function(y) {
+      if(is.null(y)) {
+        0
+      } else {
+        y
+      }
+    }))
+  
+  # Make names tidy
+  names(comm_df) <- c("x","y","z")
+  comm_df$x <- factor(comm_df$x)
+  comm_df$y <- factor(comm_df$y)
+
+  # Spread to matrix
+  comm <- with(comm_df, {
+    out <- matrix(nrow = nlevels(x), ncol = nlevels(y),
+      dimnames = list(levels(x), levels(y)))
+    out[cbind(x, y)] <- z
+    out
+  })
+
+  comm <- as.data.frame(comm)
+
+  return(comm)
+}
