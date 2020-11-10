@@ -28,22 +28,17 @@ plots <- st_as_sf(plots)
 plot_id_lookup <- readRDS("dat/plot_id_lookup.rds")
 
 # Filter stems by plot ID
+stem_size <- 10
 stems_fil <- stems %>%
   inner_join(., plot_id_lookup, by = "plot_id") %>%
-  filter(diam >= 10) %>% 
+  filter(diam >= stem_size) %>% 
   filter(plot_cluster %in% plots$plot_cluster)
-
-# Define stem percentage filter parameters
-mopane_per <- 0.5
-stems_ha <- 50
-stem_size <- 10
 
 # Summarise to only trees
 # Remove duplicated tree measurements
 tree_fil <- stems_fil %>%
   filter(!is.na(species_name_clean)) %>%
   group_by(plot_id, tree_id) %>%
-  filter(row_number() == 1) %>%  
   summarise(
     plot_cluster = first(na.omit(plot_cluster)),
     species_name_clean = first(na.omit(species_name_clean)),
@@ -52,54 +47,76 @@ tree_fil <- stems_fil %>%
     agb = sum(agb, na.rm = TRUE))
 
 # Create tree species abundance matrix by plot 
-tree_ab_mat_plot <- abMat(tree_fil, site_id = "plot_id", 
+ba_plot_mat <- abMat(tree_fil, site_id = "plot_id", 
   species_id = "species_name_clean", abundance = "ba") 
 
 # Create tree species abundance matrix by plot cluster
-tree_ab_mat_clust <- abMat(tree_fil, site_id = "plot_cluster", 
+ba_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
   species_id = "species_name_clean", abundance = "ba") 
 
 # Occurrence only version for filtering
-tree_occ_clust <- abMat(tree_fil, site_id = "plot_cluster", 
+occ_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
   species_id = "species_name_clean", abundance = NULL)
 
-# Filter abundance matrix
+# Remove genus level indets 
+ba_plot_mat <- ba_plot_mat[,-which(names(ba_plot_mat) == "Indet indet")]
+ba_clust_mat <- ba_clust_mat[,-which(names(ba_clust_mat) == "Indet indet")]
+occ_clust_mat <- occ_clust_mat[,-which(names(occ_clust_mat) == "Indet indet")]
+
+# Remove plots with fewer than x trees ha
+trees_ha <- 50
+occ_clust_plot_area <- plots$plot_id_length[match(rownames(occ_clust_mat), plots$plot_cluster)] * 0.1
+occ_clust_trees_ha <- rowSums(occ_clust_mat) / occ_clust_plot_area
+occ_clust_mat <- occ_clust_mat[occ_clust_trees_ha > trees_ha,]
+
+# Remove mopane plots
+mopane_thresh <- 0.5
+mopane_prop <- occ_clust_mat[,"Colophospermum mopane"] / rowSums(occ_clust_mat)
+occ_clust_mat <- occ_clust_mat[mopane_prop < mopane_thresh,]
+
 # Remove plots with fewer than 5 species with more than 1 individual
-ab_mat_clean <- tree_ab_mat_clust[ unname(apply(tree_occ_clust, 1, function(x) { 
+sp_ab <- unname(apply(occ_clust_mat, 1, function(x) { 
     sum(x > 1, na.rm = TRUE) 
-  })) >= 5,]  
+  }))
+occ_clust_mat <- occ_clust_mat[sp_ab >= 5,] 
 
-# Remove species with less than 5 occurrences across dataset
-ab_mat_clean <- ab_mat_clean[,colSums(tree_occ_clust) > 5]  
-
-# Remove plots with no individuals
-ab_mat_clean <- ab_mat_clean[rowSums(ab_mat_clean) != 0,]  
+# Remove species with fewer than 5 total occurrences
+occ_clust_mat <- occ_clust_mat[,colSums(occ_clust_mat) >= 5]
 
 # Exclude species which are clearly non-native
-ab_mat_clean <- ab_mat_clean %>%
-  dplyr::select(-starts_with("Pinus"), -starts_with("Eucalyptus")) 
+occ_clust_mat <- occ_clust_mat[,-which(grepl("Pinus|Eucalyptus", names(occ_clust_mat)))] 
 
-# Remove plots not in tree abundance matrix
-plots_clean <- plots[plots$plot_cluster %in% rownames(ab_mat_clean),]
-tree_ab_mat_plot_clean <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% 
-  unlist(plots_clean$plot_id_vec),]
+# Remove plots with no individuals
+occ_clust_mat <- occ_clust_mat[rowSums(occ_clust_mat) != 0,]
+
+# Clean other abundance matrices based on filtering above 
+plots_clean <- plots[plots$plot_cluster %in% rownames(occ_clust_mat),]
+ba_plot_mat_clean <- ba_plot_mat[row.names(occ_clust_mat) %in% unlist(plots_clean$plot_id_vec),
+  names(ba_plot_mat) %in% names(occ_clust_mat)]
+ba_clust_mat_clean <- ba_clust_mat[row.names(ba_clust_mat) %in% row.names(occ_clust_mat), 
+  names(ba_clust_mat) %in% names(occ_clust_mat)]
 
 # Write tree abundance matrices
-saveRDS(ab_mat_clean, "dat/tree_ab_mat.rds")
-saveRDS(tree_ab_mat_plot_clean, "dat/tree_ab_mat_plot.rds")
+saveRDS(occ_clust_mat, "dat/occ_clust_mat.rds")
+saveRDS(ba_plot_mat_clean, "dat/ba_plot_mat.rds")
+saveRDS(ba_clust_mat_clean, "dat/ba_clust_mat.rds")
 
-# Calculate common  diversity statistics
-div_df <- data.frame(plot_cluster = row.names(ab_mat_clean), 
-  richness = unname(rowSums(ab_mat_clean != 0)),
-  shannon = diversity(ab_mat_clean),
-  simpson = diversity(ab_mat_clean, "simpson"),
-  evenness = diversity(ab_mat_clean) / log(rowSums(ab_mat_clean > 0)))
+# Calculate common diversity statistics
+div_df <- data.frame(plot_cluster = row.names(occ_clust_mat), 
+  richness = unname(rowSums(occ_clust_mat != 0)),
+  shannon = diversity(occ_clust_mat),
+  simpson = diversity(occ_clust_mat, "simpson"),
+  evenness = diversity(occ_clust_mat) / log(rowSums(occ_clust_mat > 0)))
+
+# Effective true numbers diversity, based on shannon calculated by 
+# weighting on basal area.
+div_df$eff_rich <- exp(div_df$shannon)
 
 # NSCA on species abundance
-naxes <- 4
-nsca <- dudi.nsc(df = ab_mat_clean, scannf = FALSE, nf = naxes)
+naxes <- 2
+nsca <- dudi.nsc(df = occ_clust_mat, scannf = FALSE, nf = naxes)
 
-nsca_inertia <- round(nsca$eig[naxes+1], 2)*10
+nsca_inertia <- round(nsca$eig[naxes+1], 2) * 10
 
 # Extract euclidean distances between plots from NSCA
 nsca_dist <- dist(nsca$li)
@@ -185,7 +202,6 @@ nscaPlot <- function(x,y, dat = nsc_df) {
 
 pdf(file = "img/nsca.pdf", width = 12, height = 6)
 nscaPlot(RS1, RS2) +
-nscaPlot(RS1, RS3) + 
   plot_layout(guides = "collect", widths = 1) &
   scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
     limits = unique(nsc_df$cluster))
@@ -200,7 +216,7 @@ div <- plots_clean %>%
 saveRDS(div, "dat/plots_div.rds") 
 
 # Indicator species per cluster
-clust_indval <- indval(ab_mat_clean, clustering = div$cluster)
+clust_indval <- indval(ba_clust_mat_clean, clustering = div$cluster)
 
 # Summarise indicator analysis
 summary(clust_indval, p = 0.05, type = "short", digits = 2, show = p)
@@ -252,7 +268,7 @@ clust_summ_xtable <- xtable(clust_summ,
   label = "clust_summ",
   align = rep("c", 8),
   display = rep("s", 8),
-  caption = "Climatic information and Dufrene-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm. The three species per cluster with the highest indicator values are shown along with other key statistics for each cluster. MAP (Mean Annual Precipitation) and Diurnal $\\delta$T are reported as the mean and 1 standard deviation in parentheses. Species richness is reported as the median and the interquartile range in parentheses.")
+  caption = "Climatic information and Dufrene-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm, based on basal area weighted species abundances. The three species per cluster with the highest indicator values are shown along with other key statistics for each cluster. MAP (Mean Annual Precipitation) and Diurnal $\\delta$T are reported as the mean and 1 standard deviation in parentheses. Species richness is reported as the median and the interquartile range in parentheses.")
 
 fileConn <- file("out/clust_summ.tex")
 writeLines(print(clust_summ_xtable, include.rownames = FALSE,
@@ -262,11 +278,11 @@ writeLines(print(clust_summ_xtable, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-# Test Beta diversity between plots in a cluster - UNFINISHED
+# Test Beta diversity between plots in a cluster
 
 # Filter to plots we're using
-tree_ab_mat_plot_fil <- tree_ab_mat_plot[row.names(tree_ab_mat_plot) %in% 
-  unlist(strsplit(div$plot_id, ",")) & rowSums(tree_ab_mat_plot) != 0,]
+tree_ab_mat_plot_fil <- ba_plot_mat_clean[row.names(ba_plot_mat_clean) %in% 
+  unlist(strsplit(div$plot_id, ",")) & rowSums(ba_plot_mat_clean) != 0,]
 
 # Split each plot cluster into own abundance matrix
 tree_ab_mat_split <- left_join(rownames_to_column(tree_ab_mat_plot_fil), plot_id_lookup, 
@@ -313,10 +329,10 @@ clust_tally <- div %>%
 write(
   c(
     commandOutput(plot_dist_per, "plotDistPer"),
-    commandOutput(mopane_per*100, "mopanePer"),
+    commandOutput(mopane_thresh*100, "mopanePer"),
     commandOutput(nsca_inertia, "nscaInertia"),
     commandOutput(naxes, "nscaAxes"),
-    commandOutput(stems_ha, "stemsHa"),
+    commandOutput(trees_ha, "treesHa"),
     commandOutput(stem_size, "stemSize"),
     commandOutput(n_clusters, "nCluster"),
     commandOutput(clust_tally[1], "nClusterA"),

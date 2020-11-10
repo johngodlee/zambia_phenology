@@ -26,37 +26,37 @@ dat_std <- readRDS("dat/plots_anal.rds")
 
 # Fit candidate models
 max_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range +
-  evenness + richness + richness:cluster, 
+  evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 dredge_c <- dredge(max_ml_c, evaluate = TRUE, rank = "AIC")
 
 max_ml_l <- gls(s1_length ~ cum_precip_seas + diurnal_temp_range + 
-  evenness + richness + richness:cluster,
+  evenness + eff_rich + eff_rich:cluster,
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 dredge_l <- dredge(max_ml_l, evaluate = TRUE, rank = "AIC")
 
 max_ml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range +
-  evenness + richness + richness:cluster,
+  evenness + eff_rich + eff_rich:cluster,
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 dredge_r <- dredge(max_ml_r, evaluate = TRUE, rank = "AIC")
 
 max_ml_d <- gls(s1_senes_rate ~ cum_precip_end + diurnal_temp_range + 
-  evenness + richness + richness:cluster,
+  evenness + eff_rich + eff_rich:cluster,
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 dredge_d <- dredge(max_ml_d, evaluate = TRUE, rank = "AIC")
 
 max_ml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  evenness + richness + richness:cluster,
+  evenness + eff_rich + eff_rich:cluster,
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 dredge_s <- dredge(max_ml_s, evaluate = TRUE, rank = "AIC")
 
 max_ml_e <- gls(end_lag ~ cum_precip_end + diurnal_temp_range + 
-  evenness + richness + richness:cluster,
+  evenness + eff_rich + eff_rich:cluster,
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 dredge_e <- dredge(max_ml_e, evaluate = TRUE, rank = "AIC")
@@ -98,32 +98,32 @@ null_ml_list <- list(null_ml_c, null_ml_l, null_ml_r,
 # Fit REML version of "best" interaction models
 ##' For marginal effect slopes
 best_int_reml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
-  evenness + richness + richness:cluster, 
+  evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
 best_int_reml_l <- gls(s1_length ~ cum_precip_seas + 
-  evenness + richness + richness:cluster, 
+  evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
 best_int_reml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range + 
-  richness + richness:cluster, 
+  eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
 best_int_reml_d <- gls(s1_senes_rate ~ cum_precip_end + diurnal_temp_range + 
-  richness + richness:cluster, 
+  eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
 best_int_reml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  richness + richness:cluster, 
+  eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
-best_int_reml_e <- gls(end_lag ~ richness + evenness + diurnal_temp_range + 
-  richness:cluster, 
+best_int_reml_e <- gls(end_lag ~ eff_rich + evenness + diurnal_temp_range + 
+  eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
@@ -133,27 +133,27 @@ best_int_reml_list <- list(best_int_reml_c, best_int_reml_l, best_int_reml_r,
 # Fit ML version of "best" all round models
 ##' For model comparison
 best_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
-  evenness + richness,
+  evenness + eff_rich,
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
 best_ml_l <- gls(s1_length ~ cum_precip_seas + 
-  evenness + richness,
+  evenness + eff_rich,
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
 best_ml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range + 
-  richness, 
+  eff_rich, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
 best_ml_d <- gls(s1_senes_rate ~ cum_precip_end + 
-  richness + richness:cluster, 
+  eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
 best_ml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  richness, 
+  eff_rich, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
@@ -289,7 +289,7 @@ mod_slope_df <- do.call(rbind, lapply(all_mod_list[[5]], function(x) {
   mod_pred <- get_model_data(x, type = "est")
 
   mod_pred_fil <- mod_pred %>%
-    filter(!grepl("richness:cluster", term)) %>%
+    filter(!grepl("eff_rich:cluster", term)) %>%
     mutate(resp = gsub("\\s~.*", "", x$call[[2]])[2]) %>%
     dplyr::select(1:8, group, resp)
 
@@ -328,9 +328,9 @@ dev.off()
 # Export interaction effect on richness plots
 rand_marg_df <- do.call(rbind, lapply(all_mod_list[[6]], function(x) {
   preds <- as.data.frame(ggemmeans(model = x,
-      terms = c("richness", "cluster")))
+      terms = c("eff_rich", "cluster")))
   preds$resp <- gsub("\\s~.*", "", x$call[[2]])[2]  
-  names(preds) <- c("richness", "pred", "se", "conf_lo", "conf_hi", "cluster", "resp")
+  names(preds) <- c("eff_rich", "pred", "se", "conf_lo", "conf_hi", "cluster", "resp")
   return(preds)
 }))
 rand_marg_df$resp_clean <- factor(rand_marg_df$resp, 
@@ -346,11 +346,11 @@ marg_signif <- do.call(rbind, lapply(all_mod_list[[6]], function(x) {
       TRUE ~ NA_character_)
   out <- data.frame(resp = gsub("\\s~.*", "", x$call[2]),
     variable = row.names(summ), psig) 
-  out <- out[out$variable == "richness:cluster",]
+  out <- out[out$variable == "eff_rich:cluster",]
   out$x <- 0
   out$resp
   midpoint <- mean(rand_marg_df[rand_marg_df$resp == out$resp & 
-    rand_marg_df$richness == 0,"pred"])
+    rand_marg_df$eff_rich == 0,"pred"])
   out$y <- midpoint + 
     (max(rand_marg_df[rand_marg_df$resp == out$resp,"conf_hi"]) - midpoint) * 0.25
   return(out)
@@ -362,12 +362,12 @@ marg_signif$resp_clean <- factor(marg_signif$resp,
 pdf(file = "img/mod_marg.pdf", width = 12, height = 6)
 ggplot() + 
   geom_ribbon(data = rand_marg_df, 
-    aes(x = richness, ymin = conf_lo, ymax = conf_hi, colour = cluster), 
+    aes(x = eff_rich, ymin = conf_lo, ymax = conf_hi, colour = cluster), 
     linetype = 2, alpha = 0.2, fill = NA) + 
   scale_colour_manual(name = "Cluster", values = clust_pal) +
   new_scale_colour() + 
   geom_line(data = rand_marg_df, 
-    aes(x = richness, y = pred, colour = cluster),
+    aes(x = eff_rich, y = pred, colour = cluster),
     size = 1.5) + 
   geom_text(data = marg_signif, 
     aes(x = x, y = y, label = psig),
@@ -382,7 +382,7 @@ dev.off()
 # Post-hoc tests for significance of interaction slope differences
 lsq_list <- lapply(all_mod_list[[6]], function(x) {
   emmeans(x, 
-  pairwise ~ cluster*richness, 
+  pairwise ~ cluster*eff_rich, 
   adjust = "tukey")
 })
 

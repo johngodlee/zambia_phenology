@@ -91,38 +91,32 @@ dev.off()
 
 # Create bivariate relationships plot
 bivar_list <- c(
-  "cum_vi ~ richness",
-  "cum_vi ~ evenness",
+  "cum_vi ~ eff_rich",
   "cum_vi ~ n_stems_gt10_ha",
   "cum_vi ~ map",
   "cum_vi ~ diurnal_temp_range",
 
-  "s1_length ~ richness",
-  "s1_length ~ evenness",
+  "s1_length ~ eff_rich",
   "s1_length ~ n_stems_gt10_ha",
   "s1_length ~ map",
   "s1_length ~ diurnal_temp_range",
 
-  "s1_green_rate ~ richness",
-  "s1_green_rate ~ evenness",
+  "s1_green_rate ~ eff_rich",
   "s1_green_rate ~ n_stems_gt10_ha",
   "s1_green_rate ~ map",
   "s1_green_rate ~ diurnal_temp_range",
 
-  "s1_senes_rate ~ richness",
-  "s1_senes_rate ~ evenness",
+  "s1_senes_rate ~ eff_rich",
   "s1_senes_rate ~ n_stems_gt10_ha",
   "s1_senes_rate ~ map",
   "s1_senes_rate ~ diurnal_temp_range",
 
-  "start_lag ~ richness",
-  "start_lag ~ evenness",
+  "start_lag ~ eff_rich",
   "start_lag ~ n_stems_gt10_ha",
   "start_lag ~ map",
   "start_lag ~ diurnal_temp_range", 
 
-  "end_lag ~ richness",
-  "end_lag ~ evenness",
+  "end_lag ~ eff_rich",
   "end_lag ~ n_stems_gt10_ha",
   "end_lag ~ map",
   "end_lag ~ diurnal_temp_range"

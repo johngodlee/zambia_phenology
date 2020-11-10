@@ -1,9 +1,9 @@
 # Define variable name lookup
-pred_lookup <- c("Richness", "Evenness", "MAP",
-  "Wet season precip.", "Pre-green-up precip.", "Pre-senescence precip.",
+pred_lookup <- c("Richness", "Evenness", "Stem density",  
+  "MAP", "Wet season precip.", "Pre-green-up precip.", "Pre-senescence precip.",
     "Vegetation type", "Diurnal dT")
-names(pred_lookup) <- c("richness", "evenness", "map",
-  "cum_precip_seas", "cum_precip_pre", "cum_precip_end",
+names(pred_lookup) <- c("eff_rich", "evenness", "n_stems_gt10_ha",
+  "map", "cum_precip_seas", "cum_precip_pre", "cum_precip_end",
   "cluster", "diurnal_temp_range")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
