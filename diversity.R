@@ -149,11 +149,9 @@ dev.off()
 ward_clust <- hclust(nsca_dist, method = "ward.D2")
 ward_dat <- dendro_data(ward_clust)
 
-plot.new()
-clust_classif <- rect.hclust(ward_clust, k = n_clusters)
-clust_df <- do.call(rbind, lapply(seq(length(clust_classif)), function(x) {
-  data.frame(plot_cluster = names(clust_classif[[x]]), cluster = as.character(x))
-}))
+clust_classif <- cutree(ward_clust, k = n_clusters)
+clust_df <- data.frame(plot_cluster = names(clust_classif), 
+  cluster = unname(clust_classif))
 
 ward_merge <- left_join(ward_dat$labels, clust_df, by = c("label" = "plot_cluster"))
 
