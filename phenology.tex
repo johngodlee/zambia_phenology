@@ -5,11 +5,11 @@
 \geometry{left=2.2cm,
 	right=2.2cm,
 	top=2.2cm,
-	bottom=2cm}
-\parskip 0.15cm
-\setlength{\parindent}{0cm}
-\usepackage{pdflscape}
-\usepackage[document]{ragged2e}
+	bottom=2cm}  % Page margins
+\parskip 0.15cm  % Paragraph spacing
+\setlength{\parindent}{0cm}  % No paragraph indenting
+
+\usepackage{pdflscape}  % Landscape pages
 
 % Text formatting
 \usepackage[T1]{fontenc}  % Set font
@@ -18,25 +18,19 @@
 
 \usepackage{amssymb}  % Symbols
 
-\linespread{1.25}  % Linespacing
+\linespread{1.5}  % Linespacing
 
 \usepackage{xcolor}
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{#1}}}   % todonote
 
 % Tables
 \usepackage{multirow}
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{4pt}  % Default table column sep width 
 
 % Image handling
 \usepackage{graphicx} 
 
-\makeatletter
-	\g@addto@macro\@floatboxreset\centering  % Automatically centre images (floats)
-\makeatother
-
 \graphicspath{ {img/} }  % Define image path
-
-\usepackage{subfig}  % Compound figures
 
 \usepackage{float}  % Precise figure location
 
@@ -72,6 +66,7 @@
 % Variables
 \input{out/vars.tex}
 
+% Title
 \newcommand{\titletext}{Phenology and diversity in Zambia}
 
 \begin{document}
@@ -83,7 +78,6 @@ Authors: Godlee, J. L.\textsuperscript{1}, Abel Siampale\textsuperscript{2}, Kyl
 \textsuperscript{1}: School of GeoSciences, University of Edinburgh, Edinburgh, United Kingdom \\
 \textsuperscript{2}: Forestry Department Headquarters - Ministry of Lands and Natural Resources, Cairo Road, Lusaka, Zambia \\
 \textsuperscript{3}: Royal Botanic Garden Edinburgh, Edinburgh, EH3 5LR, United Kingdom \\
-
 
 \vspace{1em}
 Corresponding author:
@@ -107,9 +101,8 @@ The data that support the findings of this study are held by the Zambian Integra
 \newpage{}
 \linenumbers
 
-%Blinded Main Text File
-%Title: \titletext{}
-
+{\Large{Blinded Main Text File}}\\
+{\Large{Title: \titletext{}}}
 
 \section*{Abstract}
 
@@ -228,13 +221,16 @@ In this study we have demonstrated a clear and measurable effect of tree species
 
 As methods for the remote sensing of tree species diversity mature, our finding that species richness strongly affects patterns of land-surface phenology should prompt earth system modellers to take advantage of remotely sensed tree species diversity data to create tailored models of the carbon cycle which incorporate not only climatic factors, but also biotic factors which govern productivity in deciduous savannas. 
 
-Patterns of senescence were poorly predicted by species richenss and evenness in our models. \citet{Cho2017} found that tree cover, measured by MODIS LAI data, had a significant effect on senescence rates in savannas in South Africa, which have similar climatic conditions to the sites in our study. Other studies both global and within southern African savannas have largely ignored patterns of senescence, instead focussing patterns of green-up \citep{}. Most commonly, these studies simply correlate the decline of rainfall with senescence, but the lack of precipitation as a term in our best model suggests that other unmeasured factors are at play. While leaf senescence is not as important for the survival of browsing herbivores as green-up, the timing of senescence with respect to temperature and precipitation has important consequences for the savanna understorey microclimate. The longer leaf material remains in the canopy after the end of the rainy season, the greater the microclimatic buffer for herbaceous understorey plants and animals, which require water and protection from high levels of insolation and dry air which can prevail rapidly after the end of the rainy season \citep{}. Our study merely exemplifies that more work needs to be done to properly characterise the drivers of senescence in this biome.
+Patterns of senescence were poorly predicted by species richenss and evenness in our models. \citet{Cho2017} found that tree cover, measured by MODIS LAI data, had a significant effect on senescence rates in savannas in South Africa, which have similar climatic conditions to the sites in our study. Other studies both global and within southern African savannas have largely ignored patterns of senescence, instead focussing patterns of green-up \citep{Gallinat2015}. Most commonly, these studies simply correlate the decline of rainfall with senescence, but the lack of precipitation as a term in our best model suggests that other unmeasured factors are at play. Alternatively, \citet{Zani2020} suggests that in resource limited environments, senescence times may largely be set by the preceding photosynthetic activity and sink-limitations on growth. For example, limited nutrient supply may prohibit photosynthesis late in the season if the preceding photosynthetic activity has depleted that supply. \citet{Reich1992} suggested that there may be direct constraints on leaf life-span, especially in disturbance and drought-prone environments such as those studied here, which would lead to senescence rate being set largely by the time since bud-burst. In our study however, we found that there was variation in season length between plots, indicating that there are additional factors at play.
+
+While leaf senescence is not as important for the survival of browsing herbivores as green-up, the timing of senescence with respect to temperature and precipitation has important consequences for the savanna understorey microclimate. The longer leaf material remains in the canopy after the end of the rainy season, the greater the microclimatic buffer for herbaceous understorey plants and animals, which require water and protection from high levels of insolation and dry air which can prevail rapidly after the end of the rainy season \citep{}. Our study merely exemplifies that more work needs to be done to properly characterise the drivers of senescence in this biome.
+
 
 While species richness is a common measure of biodiversity, abundance evenness constitutes a second key axis \citep{Wilsey2005, Hillebrand2008}. While traditionally species richness and evenness were assumed to be highly positively correlated, recent work has demonstrated that in many systems, richness and evenness may be nearly orthogonal \citep{}. In this study, we found contrasting effects of richness and evenness on both cumulative EVI and season length. Evenness caused a decrease in these phenological metrics, which we did not expect. It is possible that the negative effect of abundance evenness occurred because an increase in evenness is associated with a reduction in the canopy cover of a few highly dominant large canopy tree species (e.g. \textit{Brachystegia boehmii} and \textit{Julbenardia paniculata}), as part of the transition from woody savanna to thicket vegetation, or following a major disturbance event. Large canopy tree species have access to ground water for a longer part of the year, due to their deep root systems and conservative growth patterns. A future study may choose to explore the differential effects of species diversity in different size classes and in different physiognomic groups defined by functional form.
 
 Our coverage of very short season lengths in Zambia, as estimated by the VIPPHEN product, was restricted, with notable absences of plot data in the northeast of the country around 30.5\textdegree{}E, 11.5\textdegree{}S, and 23.0\textdegree{}E, 15.0\textdegree{}S. Upon further inspection of true colour satellite imagery, these regions are largely seasonally water-logged floodplain and swampland, and were likely ignored by the ILUA-II assessment for this reason. This also explains their divergent phenological patterns. 
 
-It is important to note that the remotely sensed EVI measurements used here don't refer only to trees, they represent the landscape as a singe unit. Nevertheless, seasonal patterns of tree leaf phenology in southern African deciduous woodlands, particularly the pre-rainy season green-up phenomenon, is driven almost exclusively by trees, while grasses tend to follow patterns of precipitation more closely \citep{}. Grasses contribute to gross primary productivity, and it was therefore in our interests to include their response in our analysis as we seek to demonstrate how tree species richness can affect cycles of carbon exchange. Additionally, the micro-climatic effects of tree leaf canopy coverage and hydraulic lift through tree deep root systems will benefit the productivity of grasses as well as understorey tree individuals.
+It is important to note that the remotely sensed EVI measurements used here aren't specific only to trees, they represent the landscape as a singe unit. Nevertheless, seasonal patterns of tree leaf phenology in southern African deciduous woodlands, particularly the pre-rainy season green-up phenomenon, is driven almost exclusively by trees, while grasses tend to follow patterns of precipitation more closely \citep{}. Grasses contribute to gross primary productivity, and it was therefore in our interests to include their response in our analysis as we seek to demonstrate how tree species richness can affect cycles of carbon exchange. Additionally, the micro-climatic effects of tree leaf canopy coverage and hydraulic lift through tree deep root systems will benefit the productivity of grasses as well as understorey tree individuals.
 
 \section{Conclusion}
 
@@ -271,7 +267,6 @@ Here we explored the role of tree species diversity on land surface phenology ac
 \end{figure}
 
 \input{out/lsq_terms_fmt.tex}
-
 
 \end{document}
 
