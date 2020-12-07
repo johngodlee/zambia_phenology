@@ -253,7 +253,7 @@ s1_senes_mod_list <- lapply(seq(length(gam_list_fil)), function(x) {
 phen_df_fil$s1_senes_rate <- unlist(lapply(s1_senes_mod_list, `[[`, 2))
 
 # Cumulative VI 
-##' Area under curve between start and end, minus minimum
+##'Area under curve between start and end, minus minimum
 phen_df_fil$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
   sum(diff(gam_fil[[x]][["doy"]]) * rollmean(gam_fil[[x]][["pred"]], 2))
 }))
