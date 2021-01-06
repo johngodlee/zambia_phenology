@@ -12,6 +12,7 @@ library(ggnewscale)
 library(shades)
 library(gridExtra)
 library(raster)
+library(xtable)
 
 source("functions.R")
 
@@ -152,6 +153,101 @@ ggplot() +
   theme_panel() + 
   labs(x = "", y = "")
 dev.off()
+
+# Scatter plots comparing each phenological metric
+dat_nogeom <- st_drop_geometry(dat_clean)
+phen_bivar_df <- do.call(rbind, lapply(combn(names(resp_lookup), 2, simplify = FALSE),
+  function(x) { 
+    out <- data.frame(dat_nogeom[,x[1]], dat_nogeom[,x[2]], x[1], x[2], 
+      dat_nogeom$cluster)
+    names(out) <- c("pred", "resp", "x_name", "y_name", "cluster")
+    return(out)
+  }))
+
+phen_bivar_df$pair_name <- paste(
+  phen_bivar_df$x_name,
+  phen_bivar_df$y_name,
+  sep = "-")
+
+phen_bivar_df$pair_label <- paste(
+  "x:", resp_lookup[match(phen_bivar_df$x_name, names(resp_lookup))],
+  "\n",
+  "y:", resp_lookup[match(phen_bivar_df$y_name, names(resp_lookup))],
+  sep = " ")
+
+pdf(file = "img/phen_bivar.pdf", width = 15, height = 10)
+ggplot() + 
+  geom_point(data = phen_bivar_df, aes(x = pred, y = resp, fill = cluster),
+    colour = "black", shape = 21) + 
+  geom_line(data = phen_bivar_df, aes(x = pred, y = resp),
+	stat = "smooth", method = "lm", colour = "black", se = FALSE, size = 1.5) + 
+  geom_line(data = phen_bivar_df, aes(x = pred, y = resp, colour = cluster), 
+	stat = "smooth", method = "lm", se = FALSE, size = 1.5) + 
+  facet_wrap(~pair_label, scales = "free") + 
+  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  theme_panel() + 
+  labs(x = "", y = "")
+dev.off()
+
+# Correlation table comparing each phenological metric across veg. types
+
+phen_bivar_split <- split(phen_bivar_df, phen_bivar_df$pair_name)
+
+phen_corr_list <- unlist(lapply(phen_bivar_split, function(x) {
+  clust_split <- split(x, x$cluster)
+
+  all_corr <- cor.test(x$pred, x$resp, method = "pearson") 
+
+  clust_corr <- lapply(clust_split, function(y) {
+    cor.test(y$pred, y$resp, method = "pearson") 
+  })
+
+  out <- c(clust_corr, list(all_corr))
+
+  names(out) <- c("1", "2", "3", "all")
+
+  return(out)
+}), recursive = FALSE)
+
+phen_corr_df <- do.call(rbind, lapply(seq(length(phen_corr_list)), function(x) {
+  nam <- unlist(strsplit(names(phen_corr_list[x]), "-|\\."))
+  corr <- phen_corr_list[[x]]$estimate
+  pval <- phen_corr_list[[x]]$p.value
+  dof <- phen_corr_list[[x]]$parameter
+  tstat <- phen_corr_list[[x]]$statistic
+  out <- data.frame(pred = nam[1], resp = nam[2], cluster = nam[3], 
+    dof, corr, tstat, pval) 
+
+  return(out)
+}))
+
+phen_corr_df$pred_pretty <- resp_lookup[match(phen_corr_df$pred, names(resp_lookup))]
+phen_corr_df$resp_pretty <- resp_lookup[match(phen_corr_df$resp, names(resp_lookup))]
+phen_corr_df$pval_pretty <- pFormat(phen_corr_df$pval)
+
+phen_corr_df_out <- phen_corr_df[,c("pred_pretty", "resp_pretty", "cluster", 
+  "dof", "corr", "tstat", "pval_pretty")]
+
+names(phen_corr_df_out) <- c("X", "Y", "Cluster", "DoF", 
+  "$r$", "$t$", "Prob.")
+
+phen_corr_xtable <- xtable(phen_corr_df_out, 
+  label = "phen_corr",
+  align = c("c", "r", "r", "c", "r", "r", "r", "r"),
+  display = c("s", "s", "s", "d", "d", "f", "f", "f"),
+  caption = "Pearson's Correlation Coefficient test for all pairwise combinations of the six phenological metrics used in this study.")
+
+fileConn <- file("out/phen_corr.tex")
+writeLines(print(phen_corr_xtable, include.rownames = FALSE,
+    table.placement = "H",
+    hline.after = c(-1, 0, seq(from = 4, by = 4, length.out = nrow(phen_corr_df) / 4)),
+    sanitize.text.function = function(x) {x}), 
+  fileConn)
+close(fileConn)
+
+
+
 
 # Standardise variables
 dat_std <- dat_clean %>% 
