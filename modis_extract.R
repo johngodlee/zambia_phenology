@@ -18,9 +18,12 @@ library(RcppRoll)
 source("functions.R")
 
 # Import data
-dat <- readRDS("dat/plots.rds")
+plots <- readRDS("dat/plots.rds")
 vipphen <- readRDS("dat/vipphen.rds")
 evi_ts_df <- readRDS("dat/evi.rds")
+
+# Are all plots in the EVI time series data?
+stopifnot(all(plots$plot_cluster %in% evi_ts_df$plot_cluster))
 
 # Clean raw ts
 evi_ts_clean <- evi_ts_df %>%
@@ -258,7 +261,7 @@ phen_df_fil$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
   sum(diff(gam_fil[[x]][["doy"]]) * rollmean(gam_fil[[x]][["pred"]], 2))
 }))
 
-phen_all <- dat %>%
+phen_all <- plots %>%
   left_join(., phen_df_fil, by = "plot_cluster") %>%
   left_join(., vipphen, by = "plot_cluster") %>%
   filter(vipphen_n_seasons < 2) %>%
