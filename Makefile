@@ -16,7 +16,7 @@ all : $(TEXFILE).pdf
 # R scripts
 
 # Data prep
-$(DATDIR)/plots.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex : data_prep.R $(DATDIR)/plots_v2.7.csv
+$(DATDIR)/plots.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex $(DATDIR)/ba_clust_mat.rds : data_prep.R $(DATDIR)/plots_v2.7.csv
 	Rscript $<
 
 # MODIS extract
@@ -27,8 +27,12 @@ $(IMGDIR)/ts_example.pdf $(DATDIR)/plots_phen.rds $(OUTDIR)/modis_extract_vars.t
 $(DATDIR)/plots_trmm.rds $(OUTDIR)/trmm_extract_vars.tex : trmm_extract.R functions.R $(DATDIR)/plots_phen.rds $(DATDIR)/trmm.rds
 	Rscript $<
 
+# TRY extract
+$(DATDIR)/plots_try.rds : try_extract.R $(DATDIR)/plots_trmm.rds $(DATDIR)/ba_clust_mat.rds
+	Rscript $<
+
 # Diversity
-$(DATDIR)/plots_div.rds $(OUTDIR)/clust_summ.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_trmm.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/stems_latest_v2.7.csv
+$(DATDIR)/plots_div.rds $(OUTDIR)/clust_summ.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_try.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/ba_clust_mat.rds
 	Rscript $<
 
 # Analysis prep
@@ -65,18 +69,14 @@ $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(OUTDIR)/clust_summ.tex
 	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make -bibtex $<
 
-# Only run time series data getting
-get : 
-	Rscript modis_get.R
-	Rscript trmm_get.R
-
 # Clean up stray intermediary files
 clean :
 	latexmk -C
 
-# Re-create time series
-ts : 
+# Re-create time series and trait values
+get : 
 	Rscript modis_get.R
 	Rscript trmm_get.R
+	Rscript try_get.R
 	Rscript vipphen.R
 

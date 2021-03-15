@@ -8,6 +8,7 @@ library(dplyr)
 library(tidyr)
 library(tibble)
 library(ggplot2)
+library(ggfortify)
 library(ggnewscale)
 library(shades)
 library(gridExtra)
@@ -29,7 +30,8 @@ zambia <- af %>%
 
 # Calculate some statistics
 dat_clean <- dat %>%
-  mutate(cluster = factor(cluster, 
+  mutate(
+    cluster = factor(cluster, 
       labels = clust_lookup[1:length(unique(dat$cluster))]),
     start_lag = -(s1_start - trmm_start),
     end_lag = s1_end - trmm_end)
@@ -72,7 +74,7 @@ write(
   file = "out/analysis_vars.tex")
 
 # Density plots of phenological metrics per cluster
-pdf(file =  "img/phen_dens_clust.pdf", width = 12, height = 10)
+pdf(file = "img/phen_dens_clust.pdf", width = 12, height = 10)
 dat_clean %>%
   dplyr::select(names(resp_lookup), cluster) %>%
   st_drop_geometry() %>%
@@ -89,6 +91,20 @@ dat_clean %>%
   scale_colour_manual(name = "Cluster", values = clust_pal) + 
   theme_panel()
 dev.off()
+
+# PCA of phenological metrics by plot and community
+phen_pca <- prcomp(st_drop_geometry(dat_clean[,names(resp_lookup)]), 
+  center = TRUE, scale. = TRUE)
+
+pdf(file = "img/phen_pca_clust.pdf", width = 8, height = 6)
+autoplot(phen_pca, data = dat_clean, 
+  fill = "cluster", colour = "black", shape = 21,
+  loadings = TRUE, loadings.label.colour = "black", 
+  loadings.colour = 'black', loadings.label = TRUE) + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  theme_panel()
+dev.off()
+
 
 # Create bivariate relationships plot
 bivar_list <- c(

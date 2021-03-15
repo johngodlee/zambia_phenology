@@ -17,10 +17,13 @@ library(RcppRoll)
 source("functions.R")
 
 # Import data
-dat <- readRDS("dat/plots_phen.rds")
+plots <- readRDS("dat/plots_phen.rds")
 
 # Read .csv files per granule 
 trmm <- readRDS("dat/trmm.rds")
+
+# Are all plots in the time series?
+stopifnot(all(plots$plot_cluster %in% trmm$plot_cluster))
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 trmm_list <- split(trmm, trmm$plot_cluster)
@@ -154,7 +157,7 @@ trmm_df$cum_precip_end <- unlist(lapply(seq(length(gam_list)), function(x) {
   sum(diff(mod_fil[,"doy"]) * rollmean(mod_fil["pred"], 2))
 }))
 
-trmm_df_clean <- dat %>%
+trmm_df_clean <- plots %>%
   left_join(., trmm_df, by = "plot_cluster") %>%
   filter(!is.na(trmm_start))
 

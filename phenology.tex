@@ -73,11 +73,11 @@
 
 {\Large{Title: \titletext{}}}
 
-Authors: Godlee, J. L.\textsuperscript{1}, Abel Siampale\textsuperscript{2}, Kyle G. Dexter\textsuperscript{1,3}
+Authors: Godlee J. L.\textsuperscript{1}, Ryan C. M.\textsuperscript{1}, Siampale A.\textsuperscript{2}, Dexter K. G.\textsuperscript{1,3}
 
-\textsuperscript{1}: School of GeoSciences, University of Edinburgh, Edinburgh, United Kingdom \\
-\textsuperscript{2}: Forestry Department Headquarters - Ministry of Lands and Natural Resources, Cairo Road, Lusaka, Zambia \\
-\textsuperscript{3}: Royal Botanic Garden Edinburgh, Edinburgh, EH3 5LR, United Kingdom \\
+\textsuperscript{1}School of GeoSciences, University of Edinburgh, Edinburgh, United Kingdom \\
+\textsuperscript{2}Forestry Department Headquarters - Ministry of Lands and Natural Resources, Cairo Road, Lusaka, Zambia \\
+\textsuperscript{3}Royal Botanic Garden Edinburgh, Edinburgh, EH3 5LR, United Kingdom \\
 
 \vspace{1em}
 Corresponding author:
@@ -96,7 +96,7 @@ JLG conceived the study, conducted the analysis, and wrote the first draft of th
 
 \section*{Data accessibility statement}
 
-The data used in this study are held by the Zambian Integrated Land Use Assessment Project (ILUA-II), and were cleaned by the SEOSAW project (A Socio-ecological Observatory for Southern African Woodlands). The data are not publicly available at the time of submission due to privacy concerns surrounding plot location, but can be requested from the corresponding author. An anonymised version will be made available in a data repository following review.
+The data used in this study are held by the Zambian Integrated Land Use Assessment Project (ILUA-II), and were cleaned by the SEOSAW project (Socio-ecological Observatory for Southern African Woodlands). The data are not publicly available at the time of submission due to privacy concerns surrounding plot location, but can be requested from the corresponding author. An anonymised version will be made available in a data repository following review.
 
 \newpage{}
 \linenumbers
@@ -108,8 +108,9 @@ The data used in this study are held by the Zambian Integrated Land Use Assessme
 
 \section{Introduction}
 
-The seasonal timing and duration of tree leaf production in dry deciduous
-savannas directly influences ecosystem processes. Leaf Area Index (LAI), leaf
+The seasonal timing and duration of tree leaf production (land-surface
+phenology) in dry deciduous
+savannas directly influences ecosystem processes. Leaf Area Index (LAI), the leaf
 area per unit ground area, and the green-ness of leaves are both tightly
 coupled with photosynthetic activity and therefore Gross Primary Productivity
 (GPP) \citep{Gu2003, Penuelas2009}. Directional shifts in GPP influence the
@@ -121,17 +122,17 @@ a longer growth period support a greater diversity and abundance of wildlife,
 particularly bird species but also browsing mammals \citep{Cole2015, Araujo2017,
 Morellato2016, Ogutu2013}. Extreme weather patterns as a result of climate
 change are leading to shorter but more intense leaf production cycles in these
-ecosystems which already close to the edge of their climatic envelope, with severe negative consequences anticipated for biodiversity \citep{Bale2002}. Understanding the determinants of seasonal patterns of tree leaf production (land-surface phenology) in dry deciduous savannas can provide valuable information on spatial variation in vulnerability to climate change, and help to model their contribution to land surface carbon cycle models under climate change.
+ecosystems which are already close to the edge of their climatic envelope, with severe negative consequences anticipated for biodiversity \citep{Bale2002}. Understanding the determinants of seasonal patterns of tree leaf production in dry deciduous savannas can provide valuable information on spatial variation in vulnerability to climate change, and help to model their contribution to land surface carbon cycle models under climate change.
 
-Previous studies have shown that diurnal temperature variation and precipitation are the primary determinants of tree phenological activity in water-limited savannas. At regional spatial scales, savanna phenological activity can be predicted using only climatic factors and light environment \citep{Adole2018a}, but local variation exists in leaf production cycles which cannot be attributed solely to abiotic environment. It has been repeatedly suggested that information on biotic environment play a larger role in predicting land-surface phenology \citep{Adole2018b, Jeganathan2014, Fuller1999}, but implementation is most often limited to coarse ecoregions or functional vegetation types, which lack the fine-scale resolution which can take advantage of state-of-the-art earth observation data. 
+Previous studies have shown that diurnal temperature variation and precipitation are the primary determinants of tree phenological activity in water-limited savannas. At regional spatial scales, savanna phenological activity can be predicted using only climatic factors and light environment \citep{Adole2018a}, but local variation exists in leaf production cycles which cannot be attributed solely to abiotic environment. It has been repeatedly suggested that information on biotic environment play a larger role in predicting land-surface phenology \citep{Adole2018b, Jeganathan2014, Fuller1999}, but implementation is most often limited to coarse ecoregions or functional vegetation types, which lack the fine-scale resolution which can take advantage of state-of-the-art earth observation data \citep{}.
 
-Tree species vary in their life history strategy with regards to the timing of leaf production \citep{Fenner1998, Cole2017, Medina1994}. More conservative species (i.e. slower growing, robust leaves, denser wood) tend to initiate leaf production (green-up) before rainfall has commenced, and persist after the rainy season has finished, despite having lower overall GPP, while more resource acquisative species and juvenile individuals tend to green-up during the rainy season, and create a dense leaf-flush during the mid-season peak of growth \citep{}. It has been suggested that this variation in leaf phenological activity between species is one aspect by which increased tree species richness causes an increase in ecosystem-level productivity in deciduous savannas \citep{}. It has also been suggested that species richness could buffer ecosystem phenology against climate warming effects \citep{Parmesan2007}. Building on research linking biodiversity and ecosystem function, one might expect that an ecosystem with a greater diversity of tree species might be better able to maintain consistent leaf coverage for a longer period over the year, as species vary in their optimal growing conditions due to niche complementarity, whereby coexisting species vary in their occupation of niche space due to competitive exclusion \citep{}.
+Tree species vary in their life history strategy with regards to the timing of leaf production \citep{Fenner1998, Cole2017, Medina1994}. More conservative species (i.e. slower growing, robust leaves, denser wood) tend to initiate leaf production (green-up) before rainfall has commenced, and persist after the rainy season has finished, despite having lower cumulative GPP during the growing season, while more resource acquisitive species and juvenile individuals tend to green-up during the rainy season, and create a dense leaf-flush during the mid-season peak of growth \citep{}. It has been suggested that this variation in leaf phenological activity between species is one aspect by which increased tree species richness causes an increase in ecosystem-level productivity in deciduous savannas \citep{}. It has also been suggested that species richness could buffer ecosystem phenology against climate warming effects \citep{Parmesan2007}. Building on research linking biodiversity and ecosystem function, one might expect that an ecosystem with a greater diversity of tree species might be better able to maintain consistent leaf coverage for a longer period over the year, as species vary in their optimal growing conditions due to niche complementarity, whereby coexisting species vary in their occupation of niche space due to competitive exclusion \citep{}.
 
 In the water-limited savannas such as those found in large areas of southern Africa \citep{}, the ability of conservative tree species to maintain consistent leaf coverage in the upper canopy strata over the growing season, but particularly at the start and end of the growing season, may provide facilitative effects to other tree species and juveniles occupying lower canopy strata that are less well-adapted to moisture-limiting conditions, but are more productive, by providing shade and influencing below ground water availability through hydraulic lift \citep{}. 
 
-Variation in tree species composition, as well as species richness, is also expected to have an effect on savanna phenology in southern Africa. Savannas of a number of different types (species composition and structure) are found across southern Africa, but these are often poorly differentiated in regional-scale phenological studies \citep{}, resulting in a dearth of information on the phenological behaviour of different woodlands. As our ability to remotely sense tree species composition improves, it allows us to create more tailored models of the carbon cycle which incorporate not only climatic factors, but also biotic factors which govern productivity. We therefore need to understand how species composition and biodiversity metrics affect land-surface phenology. 
+Variation in tree species composition, as well as species richness, is also expected to have an effect on savanna phenology in southern Africa. Savannas of a number of different types (species composition and structure) are found across southern Africa, but these are often poorly differentiated in regional-scale phenological studies \citep{} resulting in a dearth of information on the phenological behaviour of different woodland types. As our ability to remotely sense tree species composition improves, it allows us to create more tailored models of the carbon cycle which incorporate not only climatic factors, but also biotic factors which govern productivity. We therefore need to understand how species composition and biodiversity metrics affect land-surface phenology. 
 
-In the deciduous woodlands of Zambia, a highly pronounced single wet-dry season annual oscillation is observed across the majority of land area, with local exceptions in some mountainous areas \citep{}. Variation in leaf phenological activity across the country has a large influence on annual gross primary productivity. Using Zambia as a case study, we can expect similar response from deciduous woodlands across southern Africa, with important consequences for the global carbon cycle \citep{}. 
+In the deciduous woodlands of Zambia, a highly pronounced single wet-dry season annual oscillation is observed across the majority of land area, with local exceptions in some mountainous areas \citep{}. Variation in leaf phenological activity across the country has a large influence on annual GPP. Using Zambia as a case study, we can expect similar response from deciduous woodlands across southern Africa, with important consequences for the global carbon cycle \citep{}. 
 
 While cumulative leaf production across the growing season may be the most
 important aspect of leaf phenology for GPP, other phenological metrics may be

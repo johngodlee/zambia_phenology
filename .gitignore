@@ -1,6 +1,7 @@
 .DS_Store
 dat/evi_tif/**
 dat/trmm_tif/**
+dat/try/**
 dat/stems_latest_v2.7.csv
 dat/plots_v2.7.csv
 img/**
@@ -36,3 +37,4 @@ comments/**
 *.synctex.gz(busy)
 *.pdfsync
 latex.out/
+
