@@ -91,18 +91,14 @@ occ_clust_mat <- abMat(tree_fil, site_id = "plot_cluster",
 # Remove genus level indets 
 ba_clust_mat <- ba_clust_mat[,-which(names(ba_clust_mat) == "Indet indet")]
 
-# Remove plots with fewer than x trees ha
-trees_ha <- 50
+# Remove plots below 95th percentile of basal area 
+ba_ha_lim <- quantile(plots_fil_sf$ba_ha, 0.05, na.rm = TRUE)
+
 clust_plot_area <- plots_fil_sf$plot_id_length[match(rownames(ba_clust_mat), 
   plots_fil_sf$plot_cluster)] * 0.1
-occ_clust_trees_ha <- rowSums(occ_clust_mat) / clust_plot_area
-trees_ha_cluster <- row.names(occ_clust_mat[(occ_clust_trees_ha > trees_ha),])
-ba_clust_mat <- ba_clust_mat[row.names(ba_clust_mat) %in% trees_ha_cluster,]
-
-# Optionally remove mopane plots
-mopane_thresh <- 0.5
-#mopane_prop <- ba_clust_mat[,"Colophospermum mopane"] / rowSums(ba_clust_mat)
-#ba_clust_mat <- ba_clust_mat[mopane_prop < mopane_thresh,]
+ba_clust_ba_ha <- rowSums(ba_clust_mat) / clust_plot_area
+ba_ha_cluster <- row.names(ba_clust_mat[(ba_clust_ba_ha > ba_ha_lim),])
+ba_clust_mat <- ba_clust_mat[row.names(ba_clust_mat) %in% ba_ha_cluster,]
 
 # Remove plots with fewer than 5 species with more than 1 individual
 sp_ab <- unname(apply(occ_clust_mat, 1, function(x) { 
@@ -135,8 +131,7 @@ saveRDS(occ_clust_mat_clean, "dat/occ_clust_mat.rds")
 # Write stats to .tex
 write(
   c(
-    commandOutput(mopane_thresh*100, "mopanePer"),
-    commandOutput(trees_ha, "treesHa"),
+    commandOutput(ba_ha_lim, "baLim"),
     commandOutput(stem_size, "stemSize"),
     commandOutput(census, "censusDate"),
     commandOutput(n_total_sites, "nTotalSites")),
