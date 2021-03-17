@@ -8,6 +8,7 @@ img/**
 old/**
 reading/**
 comments/**
+todo.md
 
 *.tif
 
