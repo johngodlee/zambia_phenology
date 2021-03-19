@@ -30,6 +30,21 @@ trmm_list <- split(trmm, trmm$plot_cluster)
 
 trmm_seas_list <- lapply(trmm_list, function(x) {
   list(
+    s_2000 = seasonGet(x, "2000-07-01", "2001-11-01"),
+    s_2001 = seasonGet(x, "2001-07-01", "2002-11-01"),
+    s_2002 = seasonGet(x, "2002-07-01", "2003-11-01"),
+    s_2003 = seasonGet(x, "2003-07-01", "2004-11-01"),
+    s_2004 = seasonGet(x, "2004-07-01", "2005-11-01"),
+    s_2005 = seasonGet(x, "2005-07-01", "2006-11-01"),
+    s_2006 = seasonGet(x, "2006-07-01", "2007-11-01"),
+    s_2007 = seasonGet(x, "2007-07-01", "2008-11-01"),
+    s_2008 = seasonGet(x, "2008-07-01", "2009-11-01"),
+    s_2009 = seasonGet(x, "2009-07-01", "2010-11-01"),
+    s_2010 = seasonGet(x, "2010-07-01", "2011-11-01"),
+    s_2011 = seasonGet(x, "2011-07-01", "2012-11-01"),
+    s_2012 = seasonGet(x, "2012-07-01", "2012-11-01"),
+    s_2013 = seasonGet(x, "2013-07-01", "2014-11-01"),
+    s_2014 = seasonGet(x, "2014-07-01", "2015-11-01"),
     s_2015 = seasonGet(x, "2015-07-01", "2016-11-01"),
     s_2016 = seasonGet(x, "2016-07-01", "2017-11-01"),
     s_2017 = seasonGet(x, "2017-07-01", "2018-11-01"),
@@ -38,7 +53,7 @@ trmm_seas_list <- lapply(trmm_list, function(x) {
   )
 })
 
-trmm_clean <- do.call(rbind, do.call(rbind, trmm_seas_list)) %>%
+trmm_clean <- do.call(rbind, lapply(trmm_seas_list, data.table::rbindlist)) %>%
   filter(!is.na(precip))
 
 saveRDS(trmm_clean, "dat/trmm_ts.rds")
