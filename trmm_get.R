@@ -17,7 +17,7 @@ library(tidyr)
 dat <- readRDS("dat/plots.rds")
 
 # Get HDF file names 
-files <- list.files("/Volumes/UNTITLED/trmm", pattern = "*.nc4$", 
+files <- list.files("/Volumes/TOSHIBA EXT/trmm", pattern = "*.nc4$", 
   full.names = TRUE)
 
 # Create directory for output
@@ -34,24 +34,30 @@ out_names <- gsub("\\.nc4$", ".tif", basename(files))
 zam_bbox <- st_bbox(dat)
 
 # For each scene, create tif files 
-for (i in seq(length(files))) {
-  nc_file <- nc_open(files[i])
-  precip_array <- ncvar_get(nc_file, "precipitationCal")
-  fillvalue <- ncatt_get(nc_file, "precipitationCal", "_FillValue")
-  lon <- ncvar_get(nc_file, "lon")
-  lat <- ncvar_get(nc_file, "lat")
-  nc_close(nc_file) 
-  precip_array[precip_array == fillvalue$value] <- NA
+for (i in seq_along(files)) {
+  out_name <- file.path(out_dir, out_names[i])
 
-  r <- raster(precip_array, 
-    xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), 
-    crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0"))
-  
-  r <- flip(r, direction='y')
+  print(sprintf("%s/%s : %s", i, length(files), out_name))
 
-  r_crop <- crop(r, zam_bbox[c(1,3,2,4)])
+  if (!file.exists(out_name)) {
+    nc_file <- nc_open(files[i])
+    precip_array <- ncvar_get(nc_file, "precipitationCal")
+    fillvalue <- ncatt_get(nc_file, "precipitationCal", "_FillValue")
+    lon <- ncvar_get(nc_file, "lon")
+    lat <- ncvar_get(nc_file, "lat")
+    nc_close(nc_file) 
+    precip_array[precip_array == fillvalue$value] <- NA
 
-  writeRaster(r_crop, file.path(out_dir, out_names[i]), overwite = TRUE)
+    r <- raster(precip_array, 
+      xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), 
+      crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0"))
+    
+    r <- flip(r, direction='y')
+
+    r_crop <- crop(r, zam_bbox[c(1,3,2,4)])
+
+    writeRaster(r_crop, out_name, overwite = TRUE)
+  }
 }
 
 # Read in .tif files
@@ -64,8 +70,9 @@ names(tif_list) <- unlist(lapply(tif_list, function(x) {
 
 # For each scene, extract plot values 
 lapply(seq(length(tif_list)), function(j) {
+  print(sprintf("%s/%s : %s", j, length(tif_list), names(tif_list)[j]))
   out <- as.character(raster::extract(tif_list[[j]], dat, method = "bilinear"))
-  outfile <- file.path(out_dir, paste0(names(tif_list)[j], ".txt"))
+  outfile <- file.path(out_dir, "ext", paste0(names(tif_list)[j], ".txt"))
 
   write_lines(out, outfile)
 })
