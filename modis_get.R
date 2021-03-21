@@ -25,7 +25,7 @@ library(readr)
 plots <- readRDS("dat/plots.rds")
 
 # Get HDF file names 
-files <- list.files("/Volumes/UNTITLED/modis_250", pattern = "*.hdf", 
+files <- list.files("/Volumes/TOSHIBA_EXT/modis_250", pattern = "*.hdf", 
   full.names = TRUE)
 
 # extract granule names
@@ -40,7 +40,7 @@ crs_sinus <- CRS("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.18
 
 # Create directory for output
 data_dir <- "dat"
-out_dir <- file.path(data_dir, "evi_tif")
+out_dir <- file.path("/Volumes/TOSHIBA_EXT/modis_250/evi_tif")
 if (!dir.exists(out_dir)) {
   dir.create(out_dir)
 }
@@ -52,6 +52,11 @@ scaledata <- 0.0001
 # For each granule:
 for (i in seq(length(files_split))) {
 
+  gran_dir <- file.path(out_dir, names(files_split[i]))
+  if (!dir.exists(gran_dir)) {
+    dir.create(gran_dir)
+  }
+
   # Get band names
   evi_list <- paste0("HDF4_EOS:EOS_GRID:", files_split[[i]], 
     ":MODIS_Grid_16DAY_250m_500m_VI:250m 16 days EVI")
@@ -62,13 +67,16 @@ for (i in seq(length(files_split))) {
 
   # For each scene within a granule, create tif files 
   for (j in seq(length(evi_list))) {
+    print(sprintf("%s/%s : %s", j, length(evi_list), evi_list[j]))
     gdal_translate(evi_list[j], 
-      dst_dataset = file.path(out_dir, out_names[j]), 
+      dst_dataset = file.path(gran_dir, out_names[j]), 
       a_nodata = nodata)
     }
 
   # Read in .tif files
-  tif_list <- lapply(list.files(out_dir, "*.tif", full.names = TRUE), raster)
+  tif_list <- lapply(list.files(gran_dir, "*.tif", full.names = TRUE), raster)
+
+  # Add no-data field
   lapply(tif_list, function(x) {
     NAvalue(x) <- nodata
       })
@@ -86,20 +94,21 @@ for (i in seq(length(files_split))) {
   # For each scene within a granule, extract plot values 
   for (j in seq(length(tif_list))) {
     out <- as.character(raster::extract(tif_list[[j]], plots_fil, method = "bilinear"))
-    outfile <- file.path(out_dir, paste0(names(tif_list)[j], "_", granExtract(files_split[[i]][1]), ".txt"))
+    outfile <- file.path(gran_dir, 
+      paste0(names(tif_list)[j], "_", granExtract(files_split[[i]][1]), ".txt"))
 
     write_lines(out, outfile)
   }
 
   # Write file with plot cluster IDs
-  plot_cls_file <- file.path(out_dir, paste0(granExtract(files_split[[i]][1]), "_plot_id.txt"))
+  plot_cls_file <- file.path(gran_dir, paste0(granExtract(files_split[[i]][1]), "_plot_id.txt"))
   write_lines(plots_fil$plot_cluster, plot_cls_file)
 
   # Remove .tif files
-  file.remove(file.path(out_dir, out_names))
+  #file.remove(file.path(out_dir, out_names))
 
   # Import .txt files, make columns in dataframe
-  extract_files <- list.files(out_dir, "*.txt", full.names = TRUE)
+  extract_files <- list.files(gran_dir, "*.txt", full.names = TRUE)
   extract_vec <- lapply(extract_files, readLines)
   extract_df <- as.data.frame(do.call(cbind, extract_vec))
   names(extract_df) <- c(names(tif_list), "plot_cluster")
@@ -121,22 +130,22 @@ for (i in seq(length(files_split))) {
     row.names = FALSE)
     
   # Remove .txt files
-  file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
+  #file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
 }
 
 # Read .csv files per granule 
-csv_files <- list.files(data_dir, "evi_h.*_extract.csv", full.names = TRUE)
+csv_files <- list.files(gran_dir, "evi_h.*_extract.csv", full.names = TRUE)
 csv_list <- lapply(csv_files, read.csv)
 
 # Check that no plots have been included in both granules 
-any(
+stopifnot(!any(
   intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[2]]$plot_cluster)),
   intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
   intersect(unique(csv_list[[1]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
   intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[3]]$plot_cluster)),
   intersect(unique(csv_list[[2]]$plot_cluster), unique(csv_list[[4]]$plot_cluster)),
   intersect(unique(csv_list[[3]]$plot_cluster), unique(csv_list[[4]]$plot_cluster))
-  )
+  ))
 
 # Join csv files
 evi_ts_df <- do.call(rbind, csv_list)
@@ -147,6 +156,6 @@ evi_ts_df$date <- unlist(lapply(evi_ts_df$date, as.Date,
 saveRDS(evi_ts_df, "dat/evi.rds")
 
 # Remove .csv files
-file.remove(list.files(data_dir, "evi_h.*_extract.csv", full.names = TRUE))
+#file.remove(list.files(data_dir, "evi_h.*_extract.csv", full.names = TRUE))
 
 
