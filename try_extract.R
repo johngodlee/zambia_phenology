@@ -129,7 +129,7 @@ plots_cwm_species <- ba_df %>%
       all_of(trait_id_lookup$trait_col[trait_id_lookup$trait_col %in% names(.)]),
       ~weighted.mean(.x, ba, na.rm = TRUE),  .names = "{.col}_cwm")) %>%
   as.data.frame(.) %>%
-  left_join(., plots, by = "plot_cluster")
+  inner_join(., plots, by = "plot_cluster")
 
 # Calculate genus-level CWMs of traits
 traits$genus <- unlist(lapply(strsplit(traits$species, " "), "[", 1))
@@ -156,7 +156,7 @@ plots_cwm_genus <- ba_df_genus %>%
     across(
       all_of(trait_id_lookup$trait_col[trait_id_lookup$trait_col %in% names(.)]),
       ~weighted.mean(.x, ba, na.rm = TRUE),  .names = "{.col}_genus_cwm")) %>%
-  left_join(., plots_cwm_species, by = "plot_cluster")
+  inner_join(., plots_cwm_species, by = "plot_cluster")
 
 # Write to file 
 saveRDS(plots_cwm_genus, "dat/plots_try.rds") 

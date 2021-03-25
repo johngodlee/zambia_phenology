@@ -58,15 +58,33 @@ dom_sp <- do.call(rbind, lapply(ba_split, function(x) {
   x_fil$id <- 1:5
   x_spread <- pivot_wider(x_fil, names_from = id, 
     values_from = c("species", "ba", "prop"))
+  x_spread$ba_total <- ba_total
 
   return(x_spread)
 }))
 
+dom_gather <- dom_sp %>% 
+  dplyr::select(plot_cluster, starts_with("species_")) %>%
+  gather(dom, species, -plot_cluster) %>%
+  arrange(plot_cluster) %>%
+  dplyr::select(-dom)
+
+ba_dom_mat <- ba_gather %>%
+  inner_join(., dom_gather, by = c("plot_cluster", "species")) %>%
+  spread(species, ba) %>%
+  column_to_rownames("plot_cluster") %>%
+  mutate(across(everything(), ~if_else(is.na(.x), 0, .x)))
+
+stopifnot( nrow(ba_dom_mat[rowSums(ba_dom_mat) != 0,]) == 
+  nrow(ba_clust_mat) )
+stopifnot( ncol(dim(ba_dom_mat[,colSums(ba_dom_mat, na.rm = TRUE) != 0])) == 
+  ncol(ba_clust_mat) )
+
 # Construct distance matrix
-x_dist <- vegan::vegdist(ba_clust_mat)
+ba_dist <- vegan::vegdist(ba_clust_mat)
 
 # Ward distance
-beta_ward <- hclust(x_dist, method = "ward.D2")
+beta_ward <- hclust(ba_dist, method = "ward.D2")
 
 # For each nclusters create dataframe of dominant species
 nclust <- seq_len(25)
@@ -74,7 +92,7 @@ dom_all <- lapply(nclust, function(y) {
 
   cuts <- cutree(beta_ward, y)
 
-  sil <- silhouette(cuts, x_dist)
+  sil <- silhouette(cuts, ba_dist)
 
   grp <- data.frame(
     plot_cluster = row.names(ba_clust_mat),
@@ -157,11 +175,11 @@ ward_dat <- dendro_data(ward_clust)
 
 plot.new()
 clust_classif <- rect.hclust(ward_clust, k = n_clusters)
-clust_df <- do.call(rbind, lapply(seq(length(clust_classif)), function(x) {
+nsca_df <- do.call(rbind, lapply(seq(length(clust_classif)), function(x) {
   data.frame(plot_cluster = names(clust_classif[[x]]), cluster = as.character(x))
 }))
 
-ward_merge <- left_join(ward_dat$labels, clust_df, by = c("label" = "plot_cluster"))
+ward_merge <- left_join(ward_dat$labels, nsca_df, by = c("label" = "plot_cluster"))
 
 ward_rect <- ward_merge %>% 
   group_by(cluster) %>%
@@ -190,36 +208,28 @@ nsc_df <- ward_merge %>%
   mutate(cluster = as.character(cluster))
 
 # NSCA ordination plot with clusters
-nscaPlot <- function(x,y, dat = nsc_df) {
-  x <- ensym(x)
-  y <- ensym(y)
-
-  p <- ggplot(dat, aes(x = !!x, y = !!y)) +
-    geom_point(shape = 21, size = 2, aes(fill = cluster)) +
-    geom_bag(prop = 0.95, alpha = 0.2, aes(colour = cluster, fill = cluster)) +
-    scale_fill_manual(name = "Cluster", values = clust_pal) +
-    scale_colour_manual(name = "Cluster", values = clust_pal) +
-    theme_panel() +
-    labs(x = gsub("RS", "NSC ", x),
-      y = gsub("RS", "NSC ", y))
-
-  return(p)
-}
+nsc_hull <- findHull(nsc_df, "RS1", "RS2", group = "cluster")
 
 pdf(file = "img/nsca.pdf", width = 12, height = 6)
-nscaPlot(RS1, RS2) +
-  plot_layout(guides = "collect", widths = 1) &
+ggplot() +
+  geom_polygon(data = nsc_hull, 
+    aes(x = RS1, y = RS2, colour = cluster), fill = NA) + 
+  geom_polygon(data = nsc_hull, 
+    aes(x = RS1, y = RS2, fill = cluster), colour = NA, alpha = 0.5) + 
+  geom_point(data = nsc_df, aes(x = RS1, y = RS2, fill = cluster), 
+    shape = 21, size = 2) +
+  scale_fill_manual(name = "Cluster", values = clust_pal) +
   scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
-    limits = unique(nsc_df$cluster))
+    limits = unique(nsc_df$cluster)) + 
+  theme_panel() +
+  labs(x = "NSC 1", y = "NSC 2")
 dev.off()
 
 # Add values to data
 plots_div <- plots %>%
   left_join(., div_df, by = "plot_cluster") %>%
   left_join(., dom_sp, by = "plot_cluster") %>%
-  left_join(., clust_df, by = "plot_cluster") %>%
-  left_join(., clust_out[,c("plot_cluster", "c4")], by = "plot_cluster") %>%
-  rename(ward_c4 = c4) %>%
+  left_join(., nsca_df, by = "plot_cluster") %>%
   mutate(
     prop_1_cum = prop_1,
     prop_2_cum = prop_1_cum + prop_2,

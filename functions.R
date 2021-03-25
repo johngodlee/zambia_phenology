@@ -21,9 +21,10 @@ names(clust_lookup) <- c("1", "2", "3", "4", "5", "6")
 pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")
 
 # Cluster colours
-clust_pal <- c("lightseagreen", "#1b9e77","#d95f02","#7570b3","#e7298a",
-  "#66a61e","#49b9da","#a6761d", "tomato", "grey", "navy", "forestgreen", 
-  "darkgoldenrod", "black")
+clust_pal <- c("#E58606", "#5D69B1", "#52BCA3", 
+  "#99C945", "#CC61B0", "#24796C", "#DAA51B" 
+  "#2F8AC4", "#764E9F", "#ED645A", "#CC3A8E", 
+  "#A5AA99")
 
 # ggplot2 theme
 theme_panel <- function() {
@@ -244,75 +245,22 @@ stat_bag <- function(mapping = NULL, data = NULL, geom = "polygon",
   )
 }
 
-# here's the geom_
-geom_bag <- function(mapping = NULL, data = NULL,
-  stat = "identity", position = "identity",
-  prop = 0.5, 
-  alpha = 0.3,
-  ...,
-  na.rm = FALSE,
-  show.legend = NA,
-  inherit.aes = TRUE) {
-    layer(
-      data = data,
-      mapping = mapping,
-      stat = StatBag,
-      geom = GeomBag,
-      position = position,
-      show.legend = show.legend,
-      inherit.aes = inherit.aes,
-      params = list(
-        na.rm = na.rm,
-        alpha = alpha,
-        prop = prop,
-        ...
-      )
-    )
+# Get convex hull of 2D points
+findHull <- function(dat, x, y, group = NULL) {
+  if (is.null(group)) {
+    out <- dat[chull(dat[[x]], dat[[y]]), c(x, y)]
+
+  } else {
+    hulls <- by(dat, dat[[group]], function(i) {
+      i[chull(i[[x]], i[[y]]), c(x, y, group)]
+    })
+
+    out <- do.call(rbind, hulls)
+  }
+
+  return(out)
 }
 
-#' @rdname ggplot2-ggproto
-#' @format NULL
-#' @usage NULL
-#' @export
-GeomBag <- ggplot2::ggproto("GeomBag", ggplot2::Geom,
-draw_group = function(data, panel_scales, coord) {
-  n <- nrow(data)
-  if (n == 1){ return(zeroGrob()) }
-
-  munched <- coord_munch(coord, data, panel_scales)
-
-  # Sort by group to make sure that colors, fill, etc. come in same order
-  munched <- munched[order(munched$group), ]
-
-  # For gpar(), there is one entry per polygon (not one entry per point).
-  # We'll pull the first value from each group, and assume all these values
-  # are the same within each group.
-  first_idx <- !duplicated(munched$group)
-  first_rows <- munched[first_idx, ]
-
-  ggplot2:::ggname("geom_bag",
-    grid:::polygonGrob(munched$x, munched$y, default.units = "native",
-      id = munched$group,
-      gp = grid::gpar(
-        col = first_rows$colour,
-        fill = alpha(first_rows$fill, first_rows$alpha),
-        lwd = first_rows$size * .pt,
-        lty = first_rows$linetype
-      )
-    )
-  )
-  },
-  default_aes = ggplot2::aes(colour = "NA", fill = "grey20", size = 0.5, linetype = 1,
-    alpha = NA, prop = 0.5),
-
-  handle_na = function(data, params) {
-    data
-  },
-
-  required_aes = c("x", "y"),
-
-  draw_key = ggplot2::draw_key_polygon
-)
 
 # Decompose time series with overlap
 seasonGet <- function(x, min_date, max_date, date = "date") {

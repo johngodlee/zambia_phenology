@@ -96,15 +96,29 @@ dev.off()
 phen_pca <- prcomp(st_drop_geometry(dat_clean[,names(resp_lookup)]), 
   center = TRUE, scale. = TRUE)
 
+phen_pca_tidy <- as.data.frame(phen_pca$x) %>%
+  bind_cols(dat_clean)
+
+phen_pca_hulls <- findHull(phen_pca_tidy, "PC1", "PC2", "cluster")
+
+phen_pca_arrows <- data.frame(x = rownames(phen_pca$rotation), 
+  phen_pca$rotation)
+
 pdf(file = "img/phen_pca_clust.pdf", width = 8, height = 6)
-autoplot(phen_pca, data = dat_clean, 
-  fill = "cluster", colour = "black", shape = 21,
-  loadings = TRUE, loadings.label.colour = "black", 
-  loadings.colour = 'black', loadings.label = TRUE) + 
+ggplot() + 
+  geom_polygon(data = phen_pca_hulls, aes(x = PC1, y = PC2, colour = cluster), 
+    fill = NA) + 
+  geom_point(data = phen_pca_tidy, aes(x = PC1, y = PC2, fill = cluster),
+    shape = 21, colour = "black") + 
+  geom_segment(data = phen_pca_arrows, 
+    aes(x = 0, y = 0, xend = (PC1 * 5), yend = (PC2 * 5)), 
+      arrow = arrow(length = unit(1/2, "picas")), colour = "black") + 
+  geom_label(data = phen_pca_arrows, 
+    aes(x = (PC1 * 4), y = (PC2 * 4), label = x)) + 
   scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Cluster", values = clust_pal) + 
   theme_panel()
 dev.off()
-
 
 # Create bivariate relationships plot
 bivar_list <- c(
@@ -221,7 +235,7 @@ phen_corr_list <- unlist(lapply(phen_bivar_split, function(x) {
 
   out <- c(clust_corr, list(all_corr))
 
-  names(out) <- c("1", "2", "3", "all")
+  names(out) <- c(as.character(seq_len(length(out)-1)), "all")
 
   return(out)
 }), recursive = FALSE)
@@ -254,16 +268,14 @@ phen_corr_xtable <- xtable(phen_corr_df_out,
   display = c("s", "s", "s", "d", "d", "f", "f", "f"),
   caption = "Pearson's Correlation Coefficient test for all pairwise combinations of the six phenological metrics used in this study.")
 
+nclust <- length(unique(phen_corr_df_out$Cluster))
 fileConn <- file("out/phen_corr.tex")
 writeLines(print(phen_corr_xtable, include.rownames = FALSE,
     table.placement = "H",
-    hline.after = c(-1, 0, seq(from = 4, by = 4, length.out = nrow(phen_corr_df) / 4)),
+    hline.after = c(-1, 0, seq(from = nclust , by = nclust, length.out = nrow(phen_corr_df) / nclust)),
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)
-
-
-
 
 # Standardise variables
 dat_std <- dat_clean %>% 
