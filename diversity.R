@@ -62,11 +62,164 @@ dom_sp <- do.call(rbind, lapply(ba_split, function(x) {
   return(x_spread)
 }))
 
+# Construct distance matrix
+x_dist <- vegan::vegdist(ba_clust_mat)
+
+# Ward distance
+beta_ward <- hclust(x_dist, method = "ward.D2")
+
+# For each nclusters create dataframe of dominant species
+nclust <- seq_len(25)
+dom_all <- lapply(nclust, function(y) {
+
+  cuts <- cutree(beta_ward, y)
+
+  sil <- silhouette(cuts, x_dist)
+
+  grp <- data.frame(
+    plot_cluster = row.names(ba_clust_mat),
+    cu = cuts)
+  names(grp)[2] <- paste0("c", y)
+
+  tmp <- aggregate(ba_clust_mat, list(grp[,2]), FUN = mean)
+  dom <- t(round(tmp[,-1],1))
+
+  dom_df <- do.call(rbind, lapply(seq(1, y), function(z) {
+    ret <- sort(dom[,z], decreasing = TRUE)[1:5]
+    data.frame(y, z, seq(1,5), names(ret), unname(ret))
+    }))
+  names(dom_df) <- c("nclust", "clust", "ndom", "taxa", "ab")
+
+  list(grp, dom_df, sil)
+})
+
+# Extract silhouette
+sil_out <- lapply(dom_all, "[[", 3)
+
+sil_mean <- unlist(lapply(sil_out, function(x) { 
+  if (is.matrix(x)) {
+    mean(x[,3], na.rm = TRUE)
+  } else { 
+    NA_real_
+  }
+}))
+
+# Create silhouette plot
+pdf(file = "img/ward_sil.pdf", width = 6, height = 4)
+ggplot() + 
+  geom_point(aes(y = sil_mean, x = nclust)) + 
+  geom_line(aes(y = sil_mean, x = nclust)) + 
+  theme_bw() + 
+  labs(x = "N clusters", y = "Mean silhouette width")
+dev.off()
+
+# Create dataframe of dominant species
+dom_out <- do.call(rbind, lapply(dom_all, "[[", 2))
+clust_out <- Reduce( function(...) { merge(..., by = "plot_cluster") }, 
+  lapply(dom_all, "[[", 1) )
+
+# NSCA on basal area data
+naxes <- 2
+nsca <- dudi.nsc(df = ba_clust_mat, scannf = FALSE, nf = naxes)
+
+nsca_inertia <- round(nsca$eig[naxes+1], 2) * 10
+
+# Extract euclidean distances between plots from NSCA
+nsca_dist <- dist(nsca$li)
+
+# Determine optimal number of clusters for hieriarchical clustering
+kval <- seq(2,10)
+
+v <- unlist(lapply(seq(length(kval)), function(x) {
+    clust <- hclust(nsca_dist, method = "ward.D2")
+    clust_cut <- cutree(clust, k = kval[x])
+    ss <- cluster::silhouette(clust_cut, nsca_dist)
+    mean(ss[, 3])
+}))
+
+sil <- data.frame(kval, v)
+
+n_clusters <- sil$kval[which.max(sil$v)]
+
+# Silhouette plot
+pdf(file = "img/nsca_sil.pdf", width = 6, height = 4)
+ggplot(sil, aes(x = kval, y = v)) + 
+  geom_point() + 
+  geom_path() + 
+  geom_vline(xintercept = n_clusters, linetype = 2) +
+  theme_panel() + 
+  labs(x = "N clusters", y = "Mean silhouette width") 
+dev.off()
+
+# Cluster euclidean distances of NSCA with ward algorithm
+ward_clust <- hclust(nsca_dist, method = "ward.D2")
+ward_dat <- dendro_data(ward_clust)
+
+plot.new()
+clust_classif <- rect.hclust(ward_clust, k = n_clusters)
+clust_df <- do.call(rbind, lapply(seq(length(clust_classif)), function(x) {
+  data.frame(plot_cluster = names(clust_classif[[x]]), cluster = as.character(x))
+}))
+
+ward_merge <- left_join(ward_dat$labels, clust_df, by = c("label" = "plot_cluster"))
+
+ward_rect <- ward_merge %>% 
+  group_by(cluster) %>%
+  summarise(xmin = min(x)+1, 
+    xmax = max(x)-1) %>%
+  mutate(ymin = 0, ymax = 3,
+    cluster = factor(cluster, 
+      labels = clust_lookup[1:length(unique(.$cluster))]))
+
+# Dendrogram with clusters
+pdf(file = "img/clust_dendro.pdf", width = 8, height = 5)
+ggplot() + 
+  geom_segment(data = ward_dat$segments, 
+    aes(x = x, y = y, xend = xend, yend = yend)) + 
+  geom_rect(data = ward_rect, 
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, colour = cluster),
+    size = 1.2, fill = NA) + 
+  theme_panel() + 
+  scale_colour_manual(values = clust_pal)
+dev.off()
+
+# Extract data from clustering and NSCA
+nsc_df <- ward_merge %>%
+  dplyr::select(plot_cluster = label, cluster) %>%
+  left_join(., rownames_to_column(nsca$l1), by = c("plot_cluster" = "rowname")) %>%
+  mutate(cluster = as.character(cluster))
+
+# NSCA ordination plot with clusters
+nscaPlot <- function(x,y, dat = nsc_df) {
+  x <- ensym(x)
+  y <- ensym(y)
+
+  p <- ggplot(dat, aes(x = !!x, y = !!y)) +
+    geom_point(shape = 21, size = 2, aes(fill = cluster)) +
+    geom_bag(prop = 0.95, alpha = 0.2, aes(colour = cluster, fill = cluster)) +
+    scale_fill_manual(name = "Cluster", values = clust_pal) +
+    scale_colour_manual(name = "Cluster", values = clust_pal) +
+    theme_panel() +
+    labs(x = gsub("RS", "NSC ", x),
+      y = gsub("RS", "NSC ", y))
+
+  return(p)
+}
+
+pdf(file = "img/nsca.pdf", width = 12, height = 6)
+nscaPlot(RS1, RS2) +
+  plot_layout(guides = "collect", widths = 1) &
+  scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
+    limits = unique(nsc_df$cluster))
+dev.off()
+
 # Add values to data
-# How many of top n dominant species make up percentages of basal area?
 plots_div <- plots %>%
   left_join(., div_df, by = "plot_cluster") %>%
   left_join(., dom_sp, by = "plot_cluster") %>%
+  left_join(., clust_df, by = "plot_cluster") %>%
+  left_join(., clust_out[,c("plot_cluster", "c4")], by = "plot_cluster") %>%
+  rename(ward_c4 = c4) %>%
   mutate(
     prop_1_cum = prop_1,
     prop_2_cum = prop_1_cum + prop_2,
@@ -74,6 +227,35 @@ plots_div <- plots %>%
     prop_4_cum = prop_3_cum + prop_4,
     prop_5_cum = prop_4_cum + prop_5)
 
+# Indicator species per cluster
+ba_clust_mat_fil <- ba_clust_mat[row.names(ba_clust_mat) %in% plots_div$plot_cluster,]
+
+stopifnot(all(row.names(ba_clust_mat_fil) == plots_div$plot_cluster))
+
+clust_indval <- indval(ba_clust_mat_fil, clustering = plots_div$cluster)
+
+# Summarise indicator analysis
+summary(clust_indval, p = 0.05, type = "short", digits = 2, show = p)
+clust_indval$indval$sp <- row.names(clust_indval$indval)
+row.names(clust_indval$indval) <- seq(from = 1, to = length(clust_indval$indval$sp))
+
+indval_extrac <- lapply(1:n_clusters, function(x) {
+    out <- head(clust_indval$indval[order(clust_indval$indval[[x]], 
+          decreasing = TRUE),c(n_clusters+1, x)])
+    out[!grepl("indet", out$sp, ignore.case = TRUE),]
+  })
+
+indval_extrac_tidy <- do.call(rbind, lapply(indval_extrac, function(x) {
+    cluster <- names(x)[2]
+    out <- x[1:3,]
+    out$cluster <- cluster
+    names(out) <- c("species", "indval", "cluster")
+    out[,c(3,1,2)]
+  })
+)
+
+# How many of top n dominant species make up percentages of basal area?
+pdf(file = "img/basal_area_dom_hist.pdf", width = 10, height = 8)
 plots_div %>%
   st_drop_geometry() %>%
   dplyr::select(ends_with("_cum")) %>%
@@ -82,38 +264,88 @@ plots_div %>%
   geom_histogram(colour = "black", fill = "grey") + 
   geom_vline(xintercept = 0.8, linetype = 2, colour = "red") + 
   facet_wrap(~key)
+dev.off()
 
 # Reverse some columns so all increase with conservativism
-rev_cols <- c("leaf_n_mass_genus_cwm", "leaf_p_mass_genus_cwm", "sla_genus_cwm")
+rev_cols <- c("leaf_n_mass_cwm", "leaf_p_mass_cwm", "sla_cwm",
+  "leaf_n_mass_genus_cwm", "leaf_p_mass_genus_cwm", "sla_genus_cwm")
+
 cons_acq <- plots_div %>%
+  st_drop_geometry() %>%
   dplyr::select(
     plot_cluster, 
-    ends_with("_genus_cwm"), 
-    -wood_n_mass_genus_cwm,
-    -leaf_thick_genus_cwm, 
-    -bark_thick_genus_cwm,
-    -leaf_n_area_genus_cwm) %>%
+    starts_with(c("leaf_n_mass", "leaf_p_mass", "sla", "ldmc", 
+        "leaf_cn"))) %>%
   mutate(across(all_of(rev_cols), 
       ~-1 * .x,
       .names = "{.col}_rev")) %>%
   dplyr::select(-all_of(rev_cols)) %>%
   filter(across(everything(), ~!is.na(.x)))
 
+cons_acq_gen <- cons_acq %>%
+  dplyr::select(plot_cluster, contains("_genus_cwm"))
+
+cons_acq_sp <- cons_acq %>%
+  dplyr::select(plot_cluster, !contains("_genus_cwm"))
+
 # PCA of community weighted means
-cons_pca <- prcomp(st_drop_geometry(cons_acq[,-which(names(cons_acq) == "plot_cluster")]), 
+cons_pca_sp <- prcomp(cons_acq_sp[,-which(names(cons_acq_sp) == "plot_cluster")], 
   center = TRUE, scale. = TRUE)
 
-cons_pca_tidy <- as.data.frame(cons_pca$x) %>%
-  mutate(plot_cluster = cons_acq$plot_cluster)
+cons_pca_gen <- prcomp(cons_acq_gen[,-which(names(cons_acq_gen) == "plot_cluster")], 
+  center = TRUE, scale. = TRUE)
 
-cons_pca_df <- plots_div %>%
-  left_join(., cons_pca_tidy, by = "plot_cluster") %>%
+cons_pca_sp_tidy <- as.data.frame(cons_pca_sp$x) %>%
+  mutate(plot_cluster = cons_acq_sp$plot_cluster)
+
+cons_pca_sp_arrows <- data.frame(x = rownames(cons_pca_sp$rotation), 
+  cons_pca_sp$rotation)
+
+cons_pca_gen_tidy <- as.data.frame(cons_pca_gen$x) %>%
+  mutate(plot_cluster = cons_acq_gen$plot_cluster)
+
+cons_pca_gen_arrows <- data.frame(x = rownames(cons_pca_gen$rotation), 
+  cons_pca_gen$rotation)
+
+cons_pca_sp_df <- plots_div %>%
+  left_join(., cons_pca_sp_tidy, by = "plot_cluster")
+
+cons_pca_gen_df <- plots_div %>%
+  left_join(., cons_pca_gen_tidy, by = "plot_cluster") %>%
   mutate(genus_1 = unlist(lapply(strsplit(species_1, " "), "[", 1)))
 
+pdf(file = "img/cons_pca_sp.pdf", width = 20, height = 12)
 ggplot() + 
-  geom_point(data = cons_pca_df, 
-    aes(x = PC1, y = PC2, fill = genus_1, size = prop_1),
-    shape = 21, colour = "black")
+  geom_point(data = cons_pca_sp_df, 
+    aes(x = PC1, y = PC2, fill = species_1, size = prop_1, shape = species_1),
+    colour = "black") +
+  geom_segment(data = cons_pca_sp_arrows, aes(x = 0, y = 0, xend = (PC1*5),
+    yend = (PC2*5)), arrow = arrow(length = unit(1/2, "picas")),
+    color = "black") +
+  geom_label(data = cons_pca_sp_arrows, aes(x = (PC1*4), y = (PC2*4),
+    label = x)) + 
+  scale_shape_manual(values = rep(21:25, times = 14)) + 
+  scale_fill_manual(values = rep(clust_pal, times = 14)) + 
+  theme_bw() + 
+  guides(fill = guide_legend(override.aes = list(size = 5))) 
+dev.off()
+
+pdf(file = "img/cons_pca_gen.pdf", width = 20, height = 12)
+ggplot() + 
+  geom_point(data = cons_pca_gen_df, 
+    aes(x = PC1, y = PC2, fill = genus_1, size = prop_1, shape = genus_1), 
+    colour = "black") + 
+  geom_segment(data = cons_pca_gen_arrows, aes(x = 0, y = 0, xend = (PC1*5),
+    yend = (PC2*5)), arrow = arrow(length = unit(1/2, "picas")),
+    color = "black") +
+  geom_label(data = cons_pca_gen_arrows, aes(x = (PC1*4), y = (PC2*4),
+    label = x)) + 
+  scale_shape_manual(values = rep(21:25, times = 14)) + 
+  scale_fill_manual(values = rep(clust_pal, times = 14)) + 
+  theme_bw() + 
+  guides(fill = guide_legend(override.aes = list(size = 5)))
+dev.off()
+
 
 # Write file
 saveRDS(plots_div, "dat/plots_div.rds") 
