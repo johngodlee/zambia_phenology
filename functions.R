@@ -14,14 +14,16 @@ names(resp_lookup) <- c("cum_vi", "s1_length",
   "start_lag", "end_lag")
 
 # Define cluster name lookup
-clust_lookup <- c("1", "2", "3", "4")
-names(clust_lookup) <- c("1", "2", "3", "4")
+clust_lookup <- c("1", "2", "3", "4", "5", "6")
+names(clust_lookup) <- c("1", "2", "3", "4", "5", "6")
 
 # Theme colours
 pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")
 
 # Cluster colours
-clust_pal <- c("#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e","#49b9da","#a6761d")
+clust_pal <- c("lightseagreen", "#1b9e77","#d95f02","#7570b3","#e7298a",
+  "#66a61e","#49b9da","#a6761d", "tomato", "grey", "navy", "forestgreen", 
+  "darkgoldenrod", "black")
 
 # ggplot2 theme
 theme_panel <- function() {
