@@ -35,11 +35,12 @@ dat_clean <- dat %>%
       labels = clust_lookup[1:length(unique(dat$cluster))]),
     start_lag = -(s1_start - trmm_start),
     end_lag = s1_end - trmm_end)
+
+dat_nogeom <- st_drop_geometry(dat_clean)
   
 # Create density distributions of season start and end dates
-start_dens_plot <- dat_clean %>%
+start_dens_plot <- dat_nogeom %>%
   dplyr::select(s1_start, trmm_start, cluster) %>%
-  st_drop_geometry() %>%
   gather(variable, value, -cluster) %>%
   ggplot(., aes(x = value, colour = variable)) + 
     geom_density() + 
@@ -51,9 +52,8 @@ start_dens_plot <- dat_clean %>%
     theme(legend.position = "bottom") + 
     labs(x = "DOY", y = "Frequency")
 
-end_dens_plot <- dat_clean %>%
+end_dens_plot <- dat_nogeom %>%
   dplyr::select(s1_end, trmm_end, cluster) %>%
-  st_drop_geometry() %>%
   gather(variable, value, -cluster) %>%
   ggplot(., aes(x = value, colour = variable)) + 
     geom_density() + 
@@ -69,16 +69,10 @@ pdf(file = "img/dens_lag.pdf", width = 10, height = 12)
 grid.arrange(grobs = list(start_dens_plot, end_dens_plot), ncol = 1)
 dev.off()
 
-# How many sites are there?
-write(
-  commandOutput(nrow(dat_clean), "nSites"),
-  file = "out/analysis_vars.tex")
-
 # Density plots of phenological metrics per cluster
 pdf(file = "img/phen_dens_clust.pdf", width = 12, height = 10)
-dat_clean %>%
+dat_nogeom %>%
   dplyr::select(names(resp_lookup), cluster) %>%
-  st_drop_geometry() %>%
   as.data.frame() %>%
   gather(variable, value, -cluster) %>%
   dplyr::select(variable, value, cluster) %>% 
@@ -93,8 +87,9 @@ dat_clean %>%
   theme_panel()
 dev.off()
 
+
 # PCA of phenological metrics by plot and community
-phen_pca <- prcomp(st_drop_geometry(dat_clean[,names(resp_lookup)]), 
+phen_pca <- prcomp(dat_nogeom[,names(resp_lookup)], 
   center = TRUE, scale. = TRUE)
 
 phen_pca_tidy <- as.data.frame(phen_pca$x) %>%
@@ -158,9 +153,8 @@ bivar_df <- as.data.frame(do.call(rbind, lapply(bivar_list, function(x) {
   x_var <- sym(unlist(strsplit(x, split = " ~ "))[2])
   y_var <- sym(unlist(strsplit(x, split = " ~ "))[1])
 
-  dat_clean %>% 
+  dat_nogeom %>% 
     dplyr::select(!!x_var, !!y_var, cluster) %>%
-    st_drop_geometry() %>%
     rename(pred = !!x_var, resp = !!y_var) %>%
     mutate(x = as.character(x_var), 
       y = as.character(y_var))
@@ -186,7 +180,6 @@ ggplot() +
 dev.off()
 
 # Scatter plots comparing each phenological metric
-dat_nogeom <- st_drop_geometry(dat_clean)
 phen_bivar_df <- do.call(rbind, lapply(combn(names(resp_lookup), 2, simplify = FALSE),
   function(x) { 
     out <- data.frame(dat_nogeom[,x[1]], dat_nogeom[,x[2]], x[1], x[2], 
@@ -291,6 +284,9 @@ dat_std <- dat_clean %>%
   st_drop_geometry() %>%
   drop_na()
 
+# Check dataframes have same rows
+stopifnot(nrow(dat_std) == nrow(dat_clean))
+
 # Check for collinearity
 pdf(file = "img/corrplot.pdf", height = 8, width = 8)
 corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "cluster")]]) + 
@@ -298,6 +294,29 @@ corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "cluster")]]) +
   scale_y_discrete(labels = pred_lookup)
 dev.off()
 ##' None are correlated over r = 0.7, so no serious collinearity
+
+# MANOVA to show variation within vegetation clusters vs. outside
+dat_manova <- dat_std %>% 
+  mutate_at(.vars = names(resp_lookup),
+    .funs = list(std = ~(scale(.) %>% as.vector))) %>%
+  dplyr::select(cluster, ends_with("_std"))
+
+phen_manova <- manova(as.matrix(dat_manova[,grepl("_std", names(dat_manova))]) ~ 
+  dat_manova$cluster)
+
+# Tukey's tests for each phenological metric per cluster
+resps <- names(dat_manova)[grepl("_std", names(dat_manova))]
+
+resps_out <- do.call(rbind, lapply(resps, function(x) {
+  mod <- aov(dat_manova[[x]] ~ dat_manova$cluster)
+  tukey <- TukeyHSD(mod)
+  tukey_clean <- rownames_to_column(as.data.frame(tukey[[1]]), "comp")
+  tukey_clean$resp <- x
+  return(tukey_clean)
+  }))
+
+# Are all intervals overlapping 0?
+all(resps_out$upr - resps_out$lwr >= 0)
 
 # Plot location map
 s1_length_tile <- as.data.frame(
@@ -317,6 +336,11 @@ ggplot() +
   scale_fill_manual(name = "Cluster", values = clust_pal) + 
   labs(x = "", y = "")
 dev.off()
+
+# How many sites are there?
+write(
+  commandOutput(nrow(dat_clean), "nSites"),
+  file = "out/analysis_vars.tex")
 
 # Save data ready for models
 saveRDS(dat_std, "dat/plots_anal.rds")
