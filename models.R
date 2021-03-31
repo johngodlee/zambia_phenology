@@ -24,7 +24,7 @@ dat_std <- readRDS("dat/plots_anal.rds")
 
 # Mixed models with cluster random effects ----
 
-# Fit candidate models
+# Fit maximal models and rank model subsets by AIC
 max_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range +
   evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
@@ -97,32 +97,40 @@ null_ml_list <- list(null_ml_c, null_ml_l, null_ml_r,
 
 # Fit REML version of "best" interaction models
 ##' For marginal effect slopes
+# Which models are "best" while including interaction of cluster and richness?
+
+dredge_list[[1]]
 best_int_reml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
   evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
+dredge_list[[2]]
 best_int_reml_l <- gls(s1_length ~ cum_precip_seas + 
   evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
+dredge_list[[3]]
 best_int_reml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range + 
-  eff_rich + eff_rich:cluster, 
+  evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
-best_int_reml_d <- gls(s1_senes_rate ~ cum_precip_end + diurnal_temp_range + 
-  eff_rich + eff_rich:cluster, 
+dredge_list[[4]]
+best_int_reml_d <- gls(s1_senes_rate ~ cum_precip_end + 
+  evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
+dredge_list[[5]]
 best_int_reml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  eff_rich + eff_rich:cluster, 
+  evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
 
-best_int_reml_e <- gls(end_lag ~ eff_rich + evenness + diurnal_temp_range + 
+dredge_list[[6]]
+best_int_reml_e <- gls(end_lag ~ eff_rich + diurnal_temp_range + 
   eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "REML")
@@ -130,7 +138,7 @@ best_int_reml_e <- gls(end_lag ~ eff_rich + evenness + diurnal_temp_range +
 best_int_reml_list <- list(best_int_reml_c, best_int_reml_l, best_int_reml_r, 
   best_int_reml_d, best_int_reml_s, best_int_reml_e)
 
-# Fit ML version of "best" all round models
+# Fit ML version of "best" all round models without interaction
 ##' For model comparison
 best_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
   evenness + eff_rich,
@@ -143,21 +151,21 @@ best_ml_l <- gls(s1_length ~ cum_precip_seas +
   data = dat_std, method = "ML")
 
 best_ml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range + 
-  eff_rich, 
+  evenness + eff_rich, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
 best_ml_d <- gls(s1_senes_rate ~ cum_precip_end + 
-  eff_rich + eff_rich:cluster, 
+  evenness + eff_rich + eff_rich:cluster, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
 best_ml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  eff_rich, 
+  evenness + eff_rich, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
-best_ml_e <- gls(end_lag ~ evenness + diurnal_temp_range, 
+best_ml_e <- gls(end_lag ~ eff_rich + diurnal_temp_range, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
