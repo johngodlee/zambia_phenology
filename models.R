@@ -204,6 +204,9 @@ fit_list <- lapply(seq(length(best_ml_list)), function(x) {
 all_mod_list <- list(max_ml_list, dredge_list, null_ml_list, 
   best_ml_list, best_reml_list, best_int_reml_list, fit_list)
 
+names(all_mod_list) <- c("max_ml", "dredge", "null_ml",
+  "best_ml", "best_reml", "best_int_reml", "fit_list")
+
 # Write models
 saveRDS(all_mod_list, "dat/all_mod_list.rds")
 all_mod_list <- readRDS("dat/all_mod_list.rds")
