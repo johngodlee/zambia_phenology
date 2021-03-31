@@ -36,6 +36,7 @@ dat_clean <- dat %>%
     start_lag = -(s1_start - trmm_start),
     end_lag = s1_end - trmm_end)
   
+# Create density distributions of season start and end dates
 start_dens_plot <- dat_clean %>%
   dplyr::select(s1_start, trmm_start, cluster) %>%
   st_drop_geometry() %>%
