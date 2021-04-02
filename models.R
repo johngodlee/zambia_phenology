@@ -16,11 +16,15 @@ library(ggnewscale)
 library(shades)
 library(xtable)
 library(car)
+library(tibble)
+library(tidyr)
 
 source("functions.R")
 
 # Import data
 dat_std <- readRDS("dat/plots_anal.rds")
+
+ba_clust_mat <- readRDS("dat/ba_clust_mat.rds")
 
 # Mixed models with cluster random effects ----
 
@@ -156,7 +160,7 @@ best_ml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range +
   data = dat_std, method = "ML")
 
 best_ml_d <- gls(s1_senes_rate ~ cum_precip_end + 
-  evenness + eff_rich + eff_rich:cluster, 
+  evenness + eff_rich, 
   correlation = corGaus(1, form = ~x+y),
   data = dat_std, method = "ML")
 
@@ -213,7 +217,7 @@ all_mod_list <- readRDS("dat/all_mod_list.rds")
 
 # Export model statistics table
 mod_stat_df <- as.data.frame(do.call(rbind, lapply(all_mod_list[[7]], function(x) {
-      ##' If positive, max mod better
+      # If positive, max mod better
       daic <- x[2,2] - x[1,2]
       dbic <- x[2,3] - x[1,3]
       rsq <- x[1,4]
@@ -221,6 +225,7 @@ mod_stat_df <- as.data.frame(do.call(rbind, lapply(all_mod_list[[7]], function(x
 
   unlist(c(daic, dbic, rsq, dlogl))
 }))) 
+
 names(mod_stat_df) <- c("daic", "dbic", "rsq", "dlogl")
 mod_stat_df$resp <- unlist(lapply(all_mod_list[[4]], function(x) {
     gsub("\\s~.*", "", x$call[[2]])[2]
@@ -272,7 +277,7 @@ lapply(seq(length(all_mod_list[[2]])), function(x) {
   out_tab <- xtable(out,
     label = tab_name,
     caption = paste(resp_lookup[names(resp_lookup) %in% resp], 
-      "model selection candidate models, with fit statistics. The overall best model is marked by bold text, while the best model with a richness:cluster interaction term is marked by underlined text"),
+      "Model selection candidate models, with fit statistics. The overall best model is marked by bold text, while the best model with a richness:cluster interaction term is marked by underlined text"),
     align = "cccccccrrrr",
     display = c("s", "d", "s", "s", "s", "s", "s", "d", "d", "f", "f"),
     digits = c(0,0,0,0,0,0,0,0,0,2,3))
@@ -433,3 +438,168 @@ writeLines(print(lsq_terms_tab, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
+# Models with only the plots which have >50% basal area from one genus
+
+# Make proportional basal area matrix
+ba_prop <- ba_clust_mat %>%
+  rownames_to_column("plot_cluster") %>%
+  gather(species, ba, -plot_cluster) %>%
+  mutate(genus = unlist(lapply(strsplit(.$species, " "), "[[", 1))) %>%
+  group_by(plot_cluster, genus) %>%
+  summarise(ba = sum(ba)) %>%
+  group_by(plot_cluster) %>%
+  mutate(
+    ba_total = sum(ba),
+    prop_ba = ba / ba_total) %>%
+  summarise(
+    max_prop_ba = max(prop_ba),
+    genus = genus[prop_ba == max_prop_ba]) 
+
+# Histogram of max proportional abundance per plot
+pdf(file = "img/ba_prop_sp_hist.pdf", height = 5, width = 6)
+ggplot() + 
+  geom_histogram(data = ba_prop, aes(x = max_prop_ba), colour = "black") + 
+  geom_vline(xintercept = 0.5, linetype = 2, colour = "red") + 
+  theme_panel()
+dev.off()
+
+# Filter to >50% proportional abundance by single species
+# Add genus column 
+# join to other data
+ba_prop_ge50 <- ba_prop %>%
+  filter(max_prop_ba > 0.5) %>%
+  left_join(., dat_std, "plot_cluster")
+
+# Run model with these plots
+max_ml_ge50_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range +
+  evenness + eff_rich + genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+dredge_ge50_c <- dredge(max_ml_ge50_c, evaluate = TRUE, rank = "AIC")
+
+max_ml_ge50_l <- gls(s1_length ~ cum_precip_seas + diurnal_temp_range +
+  evenness + eff_rich + genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+dredge_ge50_l <- dredge(max_ml_ge50_l, evaluate = TRUE, rank = "AIC")
+
+max_ml_ge50_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range +
+  evenness + eff_rich + genus,
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+dredge_ge50_r <- dredge(max_ml_ge50_r, evaluate = TRUE, rank = "AIC")
+
+max_ml_ge50_d <- gls(s1_senes_rate ~ cum_precip_end + diurnal_temp_range + 
+  evenness + eff_rich + genus,
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+dredge_ge50_d <- dredge(max_ml_ge50_d, evaluate = TRUE, rank = "AIC")
+
+max_ml_ge50_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
+  evenness + eff_rich + genus,
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+dredge_ge50_s <- dredge(max_ml_ge50_s, evaluate = TRUE, rank = "AIC")
+
+max_ml_ge50_e <- gls(end_lag ~ cum_precip_end + diurnal_temp_range + 
+  evenness + eff_rich + genus,
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+dredge_ge50_e <- dredge(max_ml_ge50_e, evaluate = TRUE, rank = "AIC")
+
+max_ml_ge50_list <- list(max_ml_ge50_c, max_ml_ge50_l, max_ml_ge50_r, 
+  max_ml_ge50_d, max_ml_ge50_s, max_ml_ge50_e)
+
+dredge_ge50_list <- list(dredge_ge50_c, dredge_ge50_l, dredge_ge50_r, 
+  dredge_ge50_d, dredge_ge50_s, dredge_ge50_e)
+
+dredge_ge50_list[[1]]
+best_ml_ge50_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
+  evenness + genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+
+dredge_ge50_list[[2]]
+best_ml_ge50_l <- gls(s1_length ~ cum_precip_seas + 
+  evenness + genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+
+dredge_ge50_list[[3]]
+best_ml_ge50_r <- gls(s1_green_rate ~ diurnal_temp_range + 
+  eff_rich + genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+
+dredge_ge50_list[[4]]
+best_ml_ge50_d <- gls(s1_senes_rate ~ genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+
+dredge_ge50_list[[5]]
+best_ml_ge50_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
+  evenness + eff_rich + genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+
+dredge_ge50_list[[6]]
+best_ml_ge50_e <- gls(end_lag ~ diurnal_temp_range + genus, 
+  correlation = corGaus(1, form = ~x+y),
+  data = ba_prop_ge50, method = "ML")
+
+best_ml_ge50_list <- list(best_ml_ge50_c, best_ml_ge50_l, best_ml_ge50_r, 
+  best_ml_ge50_d, best_ml_ge50_s, best_ml_ge50_e)
+
+best_reml_ge50_c <- update(best_ml_ge50_c, method = "REML")
+best_reml_ge50_l <- update(best_ml_ge50_l, method = "REML")
+best_reml_ge50_r <- update(best_ml_ge50_r, method = "REML")
+best_reml_ge50_d <- update(best_ml_ge50_d, method = "REML")
+best_reml_ge50_s <- update(best_ml_ge50_s, method = "REML")
+best_reml_ge50_e <- update(best_ml_ge50_e, method = "REML")
+
+best_reml_ge50_list <- list(best_reml_ge50_c, best_reml_ge50_l, best_reml_ge50_r, 
+  best_reml_ge50_d, best_reml_ge50_s, best_reml_ge50_e)
+
+all_mod_ge50_list <- list(max_ml_ge50_list, dredge_ge50_list, 
+  best_ml_ge50_list, best_reml_ge50_list)
+
+names(all_mod_ge50_list) <- c("max_ml", "dredge", 
+  "best_ml", "best_reml")
+
+mod_slope_ge50_df <- do.call(rbind, lapply(all_mod_ge50_list[[4]], function(x) {
+  mod_pred <- get_model_data(x, type = "est")
+
+  mod_pred_fil <- mod_pred %>%
+    filter(!grepl("eff_rich:cluster", term)) %>%
+    mutate(resp = gsub("\\s~.*", "", x$call[[2]])[2]) %>%
+    dplyr::select(1:8, group, resp)
+
+  return(mod_pred_fil)
+  })) %>%
+  mutate(term = factor(term, levels = rev(names(pred_lookup)), labels = rev(pred_lookup)),
+    resp = factor(resp, 
+      levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
+      labels = resp_lookup[c(1,3,5,2,4,6)]),
+    psig = case_when(
+      p.value <= 0.05 ~ "*",
+      p.value <= 0.01 ~ "**",
+      p.value <= 0.001 ~ "***",
+      TRUE ~ NA_character_))
+
+ggplot() +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_errorbarh(data = mod_slope_ge50_df, 
+    aes(xmin = conf.low, xmax = conf.high, y = term, colour = group),
+    height = 0) + 
+  geom_point(data = mod_slope_ge50_df,
+    aes(x = estimate, y = term, fill = group),
+    shape = 21, colour = "black") + 
+  geom_text(data = mod_slope_ge50_df,
+    aes(x = estimate, y = term, colour = group, label = psig),
+    size = 8, nudge_y = 0.1) + 
+  facet_wrap(~resp, scales = "free_x") + 
+  scale_fill_manual(name = "", values = pal[3:4]) +
+  scale_colour_manual(name = "", values = pal[3:4]) +
+  theme_panel() + 
+  theme(legend.position = "none") + 
+  labs(x = "Estimate", y = "")

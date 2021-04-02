@@ -275,7 +275,8 @@ close(fileConn)
 dat_std <- dat_clean %>% 
   mutate_at(.vars = names(pred_lookup)[which(names(pred_lookup) != "cluster")],
     .funs = list(std = ~(scale(.) %>% as.vector))) %>%
-  dplyr::select(ends_with("_std"), cluster, names(resp_lookup), geometry) %>%
+  dplyr::select(plot_cluster, ends_with("_std"), cluster, names(resp_lookup), 
+    geometry) %>%
   rename_at(.vars = vars(ends_with("_std")), 
     .funs = list(~gsub("_std", "", .))) %>%
   st_transform(., UTMProj4("35S")) %>%
