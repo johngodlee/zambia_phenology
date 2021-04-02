@@ -3,7 +3,6 @@
 # 2020-09-02
 
 # Packages
-library(dplyr)
 library(tidyr)
 library(sf)
 library(vegan)
@@ -216,24 +215,6 @@ nsc_df <- ward_merge %>%
   left_join(., rownames_to_column(nsca$l1), by = c("plot_cluster" = "rowname")) %>%
   mutate(cluster = as.character(cluster))
 
-# NSCA ordination plot with clusters
-nsc_hull <- findHull(nsc_df, "RS1", "RS2", group = "cluster")
-
-pdf(file = "img/nsca.pdf", width = 12, height = 6)
-ggplot() +
-  geom_polygon(data = nsc_hull, 
-    aes(x = RS1, y = RS2, colour = cluster), fill = NA) + 
-  geom_polygon(data = nsc_hull, 
-    aes(x = RS1, y = RS2, fill = cluster), colour = NA, alpha = 0.5) + 
-  geom_point(data = nsc_df, aes(x = RS1, y = RS2, fill = cluster), 
-    shape = 21, size = 2) +
-  scale_fill_manual(name = "Cluster", values = clust_pal) +
-  scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
-    limits = unique(nsc_df$cluster)) + 
-  theme_panel() +
-  labs(x = "NSC 1", y = "NSC 2")
-dev.off()
-
 # Indicator species per cluster
 clust_indval <- indval(ba_clust_mat, clustering = nsc_df$cluster)
 
@@ -256,6 +237,27 @@ nsc_indval_extrac_tidy <- do.call(rbind, lapply(nsc_indval_extrac, function(x) {
     out[,c(3,1,2)]
   })
 )
+
+# Combine clusters 1 and 3 based on indicator values?
+
+# NSCA ordination plot with clusters
+nsc_hull <- findHull(nsc_df, "RS1", "RS2", group = "cluster")
+
+pdf(file = "img/nsca.pdf", width = 12, height = 6)
+ggplot() +
+  geom_polygon(data = nsc_hull, 
+    aes(x = RS1, y = RS2, colour = cluster), fill = NA) + 
+  geom_polygon(data = nsc_hull, 
+    aes(x = RS1, y = RS2, fill = cluster), colour = NA, alpha = 0.5) + 
+  geom_point(data = nsc_df, aes(x = RS1, y = RS2, fill = cluster), 
+    shape = 21, size = 2) +
+  scale_fill_manual(name = "Cluster", values = clust_pal) +
+  scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
+    limits = unique(nsc_df$cluster)) + 
+  theme_panel() +
+  labs(x = "NSC 1", y = "NSC 2")
+dev.off()
+
 
 # How many of top n dominant species make up percentages of basal area?
 pdf(file = "img/basal_area_dom_hist.pdf", width = 10, height = 8)
