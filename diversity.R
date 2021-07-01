@@ -13,6 +13,7 @@ library(labdsv)
 library(shades)
 library(tibble)
 library(ggdendro)
+library(taxize)
 
 source("functions.R")
 
@@ -24,6 +25,49 @@ plot_id_lookup <- readRDS("dat/plot_id_lookup.rds")
 
 ba_clust_mat <- readRDS("dat/ba_clust_mat.rds")
 
+# Filter basal area matrix to plots in `plots`
+ba_clust_mat <- ba_clust_mat[row.names(ba_clust_mat) %in% plots$plot_cluster,]
+ba_clust_mat <- ba_clust_mat[,colSums(ba_clust_mat) > 0]
+
+# Get taxonomic ranks
+sp_tax <- gnr_resolve(names(ba_clust_mat),
+  resolve_once = FALSE, with_context = TRUE, 
+  canonical = TRUE, with_canonical_ranks = TRUE,
+  best_match_only = TRUE, cap_first = FALSE, fields = "all",
+  data_source_ids = c(179, 167, 165, 11, 4))
+
+# Extract family and subfamily
+split_rank <- strsplit(sp_tax$classification_path_ranks, split = "\\|")
+
+fam_locs <- unlist(lapply(split_rank, function(x) {
+  if (length(which(x == "family")) == 1) {
+    which(x == "family")
+  } else {
+    NA
+  }
+}))
+
+subfam_locs <- unlist(lapply(split_rank, function(x) {
+  if (length(which(x == "subfamily")) == 1) {
+    which(x == "subfamily")
+  } else {
+    NA
+  }
+}))
+
+split_taxon <- strsplit(sp_tax$classification_path, split = "\\|")
+
+sp_tax$family <- unlist(lapply(1:length(split_taxon), function(x) {
+  gsub("^$", NA, split_taxon[[x]][fam_locs[x]])
+}))
+
+sp_tax$subfamily <- unlist(lapply(1:length(split_taxon), function(x) {
+  gsub("^$", NA, split_taxon[[x]][subfam_locs[x]])
+}))
+
+# Write species information file
+saveRDS(sp_tax, "dat/sp_taxon.rds")
+
 # Calculate common diversity statistics
 div_df <- data.frame(plot_cluster = row.names(ba_clust_mat), 
   richness = unname(rowSums(ba_clust_mat != 0)),
@@ -32,7 +76,7 @@ div_df <- data.frame(plot_cluster = row.names(ba_clust_mat),
   evenness = diversity(ba_clust_mat) / log(rowSums(ba_clust_mat > 0)))
 
 # Effective true numbers diversity
-# based on shannon calculated by weighting on basal area.
+# based on Shannon calculated by weighting on basal area.
 div_df$eff_rich <- exp(div_df$shannon)
 
 # Gather matrix to dataframe
@@ -54,22 +98,36 @@ dom_sp <- do.call(rbind, lapply(ba_split, function(x) {
   x_fil$prop <- x_fil$ba / ba_total
   x_fil$id <- 1:5
   x_spread <- pivot_wider(x_fil, names_from = id, 
-    values_from = c("species", "ba", "prop"))
+    values_from = c("species", "ba", "prop")) %>%
+    filter(!is.na(plot_cluster))
   x_spread$ba_total <- ba_total
 
   return(x_spread)
 }))
 
-dom_sp_cum <- dom_sp %>%
-  mutate(
-    prop_1_cum = prop_1,
-    prop_2_cum = prop_1_cum + prop_2,
-    prop_3_cum = prop_2_cum + prop_3,
-    prop_4_cum = prop_3_cum + prop_4,
-    prop_5_cum = prop_4_cum + prop_5)
+# Join families
+dom_sp$family_1 <- sp_tax[match(dom_sp$species_1, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$family_2 <- sp_tax[match(dom_sp$species_2, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$family_3 <- sp_tax[match(dom_sp$species_3, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$family_4 <- sp_tax[match(dom_sp$species_4, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$family_5 <- sp_tax[match(dom_sp$species_5, sp_tax$user_supplied_name), "family"][[1]]
+
+# Join subfamilies
+dom_sp$subfamily_1 <- sp_tax[match(dom_sp$species_1, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$subfamily_2 <- sp_tax[match(dom_sp$species_2, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$subfamily_3 <- sp_tax[match(dom_sp$species_3, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$subfamily_4 <- sp_tax[match(dom_sp$species_4, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$subfamily_5 <- sp_tax[match(dom_sp$species_5, sp_tax$user_supplied_name), "subfamily"][[1]]
+
+# Calculate cumulative proportions
+dom_sp$prop_1_cum <- dom_sp$prop_1
+dom_sp$prop_2_cum <- dom_sp$prop_1 + dom_sp$prop_2
+dom_sp$prop_3_cum <- dom_sp$prop_2 + dom_sp$prop_3
+dom_sp$prop_4_cum <- dom_sp$prop_3 + dom_sp$prop_4
+dom_sp$prop_5_cum <- dom_sp$prop_4 + dom_sp$prop_5
 
 # Gather dominant species dataframe
-dom_gather <- dom_sp_cum %>% 
+dom_gather <- dom_sp %>% 
   dplyr::select(plot_cluster, starts_with("species_")) %>%
   gather(dom, species, -plot_cluster, -ends_with("_cum")) %>%
   arrange(plot_cluster) %>%
@@ -261,7 +319,7 @@ dev.off()
 
 # How many of top n dominant species make up percentages of basal area?
 pdf(file = "img/basal_area_dom_hist.pdf", width = 10, height = 8)
-dom_sp_cum %>%
+dom_sp %>%
   dplyr::select(ends_with("_cum")) %>%
   gather(key, value, -plot_cluster) %>%
   ggplot(., aes(x = value)) + 
@@ -361,7 +419,7 @@ dev.off()
 # Add values to data
 plots_div <- plots %>%
   left_join(., div_df, by = "plot_cluster") %>%  # Diversity stats
-  left_join(., dom_sp_cum, by = "plot_cluster") %>%  # Dominant species
+  left_join(., dom_sp, by = "plot_cluster") %>%  # Dominant species
   left_join(., nsc_df, by = "plot_cluster") %>%  # NSCA clusters and axes
   left_join(., cons_pca_sp_tidy, by = "plot_cluster") %>%  # Species PCA cons-acq
   left_join(., cons_pca_gen_tidy, by = "plot_cluster")  # Genus PCA cons-acq

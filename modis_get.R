@@ -3,9 +3,9 @@
 # 2020-08-24
 
 # Downloaded 4 granules
-# 2015 - present
-# 22 scenes per year per granule.
-# 517 files total
+# 2010 - present
+# 23 scenes per year per granule, except 2000 and 2021
+# 1936 files total
 # MOD13Q1.A2015001.h20v10.006.2015295100845.hdf 
 # PRODUCT.DATEAQUI.GRANUL.VER.DATEOFPRODUCT.hdf
 
@@ -22,7 +22,11 @@ library(raster)
 library(readr)
 
 # Import plot data 
-plots <- readRDS("dat/plots.rds")
+plots <- readRDS("dat/sites_loc.rds")
+
+plots_sf <- st_as_sf(plots, 
+  coords = c("longitude_of_centre", "latitude_of_centre"), 
+  crs = 4326)
 
 # Get HDF file names 
 files <- list.files("/Volumes/TOSHIBA_EXT/modis_250", pattern = "*.hdf", 
@@ -35,9 +39,6 @@ granExtract <- function(x) {
 
 files_split <- split(files, granExtract(files))
 
-# Define CRS
-crs_sinus <- CRS("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs")
-
 # Create directory for output
 data_dir <- "dat"
 out_dir <- file.path("/Volumes/TOSHIBA_EXT/modis_250/evi_tif")
@@ -49,7 +50,7 @@ if (!dir.exists(out_dir)) {
 nodata <- -3000
 scaledata <- 0.0001
 
-# For each granule:
+# For each granule create tif files
 for (i in seq(length(files_split))) {
 
   gran_dir <- file.path(out_dir, names(files_split[i]))
@@ -67,11 +68,26 @@ for (i in seq(length(files_split))) {
 
   # For each scene within a granule, create tif files 
   for (j in seq(length(evi_list))) {
-    print(sprintf("%s/%s : %s", j, length(evi_list), evi_list[j]))
-    gdal_translate(evi_list[j], 
-      dst_dataset = file.path(gran_dir, out_names[j]), 
-      a_nodata = nodata)
+    out_name <- file.path(gran_dir, out_names[j])
+    print(sprintf("%s/%s : %s/%s : %s", 
+        i, length(files_split), 
+        j, length(evi_list), 
+        evi_list[j]))
+    if (!file.exists(out_name)) {
+      gdal_translate(evi_list[j], 
+        dst_dataset = out_name, 
+        a_nodata = nodata)
     }
+  }
+}
+
+# For each granule extract plot values
+for (i in seq(length(files_split))) {
+  # Define directory holding tif files for this granule
+  gran_dir <- file.path(out_dir, names(files_split[i]))
+  if (!dir.exists(gran_dir)) {
+    dir.create(gran_dir)
+  }
 
   # Read in .tif files
   tif_list <- lapply(list.files(gran_dir, "*.tif", full.names = TRUE), raster)
@@ -89,7 +105,7 @@ for (i in seq(length(files_split))) {
   # Filter plots by granule coverage
   tif_poly <- st_as_sfc(st_bbox(tif_list[[1]])) %>%
     st_transform(., 4326)
-  plots_fil <- st_filter(plots, tif_poly)
+  plots_fil <- st_filter(plots_sf, tif_poly)
 
   # For each scene within a granule, extract plot values 
   for (j in seq(length(tif_list))) {
@@ -134,7 +150,7 @@ for (i in seq(length(files_split))) {
 }
 
 # Read .csv files per granule 
-csv_files <- list.files(gran_dir, "evi_h.*_extract.csv", full.names = TRUE)
+csv_files <- list.files(data_dir, "evi_h.*_extract.csv", full.names = TRUE)
 csv_list <- lapply(csv_files, read.csv)
 
 # Check that no plots have been included in both granules 
