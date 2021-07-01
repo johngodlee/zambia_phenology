@@ -269,19 +269,21 @@ seasonGet <- function(x, min_date, max_date, date = "date") {
   # Subset data between max and min dates
   out <- x[x[[date]] > as.Date(min_date) & x[[date]] < as.Date(max_date),]
 
-  # Get the "season" of the data, i.e. the year the measurements start
-  out$season <- min(format(out[[date]], "%Y"))
+  if (nrow(out) > 0) {
+    # Get the "season" of the data, i.e. the year the measurements start
+    out$season <- min(format(out[[date]], "%Y"))
 
-  # Get the days from the min date
-  out$days <- as.numeric(out[[date]] - as.Date(min_date))
+    # Get the days from the min date
+    out$days <- as.numeric(out[[date]] - as.Date(min_date))
 
-  # Get year
-  out$year <- format(out[[date]], "%Y")
+    # Get year
+    out$year <- format(out[[date]], "%Y")
 
-  # Recenter days on start of year in middle of growing season
-  out$doy <- as.numeric(out$date - as.Date(paste0(format(as.Date(max_date), "%Y"), "-01-01")))
+    # Recenter days on start of year in middle of growing season
+    out$doy <- as.numeric(out$date - as.Date(paste0(format(as.Date(max_date), "%Y"), "-01-01")))
     
-  return(out)
+    return(out)
+  }
 }
 
 #' Generate a species by site abundance matrix

@@ -14,15 +14,18 @@ library(readr)
 library(tidyr)
 
 # Import plot data
-dat <- readRDS("dat/plots.rds")
+dat <- readRDS("dat/sites_loc.rds")
+
+dat_sf <- st_as_sf(dat, coords = c("longitude_of_centre", "latitude_of_centre"))
 
 # Get HDF file names 
-files <- list.files("/Volumes/TOSHIBA EXT/trmm", pattern = "*.nc4$", 
+files <- list.files("/Volumes/TOSHIBA_EXT/trmm", pattern = "*.nc4$", 
   full.names = TRUE)
 
 # Create directory for output
 data_dir <- "dat"
-out_dir <- file.path(data_dir, "trmm_tif")
+
+out_dir <- "/Volumes/TOSHIBA_EXT/trmm/trmm_tif"
 if (!dir.exists(out_dir)) {
   dir.create(out_dir)
 }
@@ -31,10 +34,11 @@ if (!dir.exists(out_dir)) {
 out_names <- gsub("\\.nc4$", ".tif", basename(files))
 
 # Define bounding box to crop to
-zam_bbox <- st_bbox(dat)
+zam_bbox <- st_bbox(dat_sf)
 
 # For each scene, create tif files 
 for (i in seq_along(files)) {
+  # Get file name for tif
   out_name <- file.path(out_dir, out_names[i])
 
   print(sprintf("%s/%s : %s", i, length(files), out_name))
@@ -71,7 +75,7 @@ names(tif_list) <- unlist(lapply(tif_list, function(x) {
 # For each scene, extract plot values 
 lapply(seq(length(tif_list)), function(j) {
   print(sprintf("%s/%s : %s", j, length(tif_list), names(tif_list)[j]))
-  out <- as.character(raster::extract(tif_list[[j]], dat, method = "bilinear"))
+  out <- as.character(raster::extract(tif_list[[j]], dat_sf, method = "bilinear"))
   outfile <- file.path(out_dir, "ext", paste0(names(tif_list)[j], ".txt"))
 
   write_lines(out, outfile)
@@ -82,9 +86,10 @@ plot_cls_file <- file.path(out_dir, "plot_id.txt")
 write_lines(dat$plot_cluster, plot_cls_file)
 
 # Import .txt files, make columns in dataframe
-extract_files <- list.files(out_dir, "*.txt", full.names = TRUE)
+extract_files <- list.files(file.path(out_dir, "ext"), "*.txt", full.names = TRUE)
 extract_vec <- lapply(extract_files, readLines)
 extract_df <- as.data.frame(do.call(cbind, extract_vec))
+extract_df$plot_cluster <- dat$plot_cluster
 names(extract_df) <- c(names(tif_list), "plot_cluster")
 extract_df[,seq(length(extract_df) - 1)] <- lapply(
   extract_df[,seq(length(extract_df) - 1)], as.numeric)
@@ -99,10 +104,10 @@ extract_df_clean <- extract_df %>%
 saveRDS(extract_df_clean, file.path(data_dir, "trmm.rds"))
   
 # Remove .txt files
-file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
+#file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
 
 # Remove .tif files
-file.remove(file.path(out_dir, out_names))
+#file.remove(file.path(out_dir, out_names))
 
 
 

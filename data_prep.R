@@ -2,6 +2,16 @@
 # John Godlee (johngodlee@gmail.com)
 # 2020-09-02
 
+# Filter to ILUAii plots
+# Summarise to site (x4 plots)
+# Save site locations for modis_get.R and trmm_get.R
+# Filter to stems >10 cm DBH, alive
+# Summarise stems to trees
+# Filter to sites with >5 species with >1 individual
+# Filter to sites with >50 trees ha
+# Filter to sites with no non-native species
+# Create basal area abundance matrices
+
 # Packages
 library(dplyr)
 library(tidyr)
@@ -17,13 +27,32 @@ plots_sp <- read.csv("dat/plots_spatial_v2.12.csv")
 stems <- read.csv("dat/stems_iluaii_v2.12.csv")
 
 # Subset plots and data fields - Zambia ILUAii data only
-plots_fil_sf <- plots %>% 
-  filter(prinv == "Siampale A.") %>%  # Filter ILUAii plots
+plots_iluaii <- plots %>% 
+  filter(prinv == "Siampale A.")  # Filter to ILUAii plots
+
+# Get statistics about sites
+census <- unique(plots_iluaii$census_date) 
+
+n_total_sites <- plots_iluaii %>%
+  pull(plot_cluster) %>%
+  unique() %>%
+  length()
+
+# Save site locations to file, for modis_get.R and trmm_get.R
+plots_iluaii %>% 
+  group_by(plot_cluster) %>%  # Group by plot cluster
+  summarise(
+    plot_id = paste0(plot_id, collapse = ","),
+    longitude_of_centre = mean(longitude_of_centre, na.rm = TRUE),
+    latitude_of_centre = mean(latitude_of_centre, na.rm = TRUE)) %>% 
+  saveRDS(., "dat/sites_loc.rds")
+
+# Summarise to sites
+plots_fil_sf <- plots_iluaii %>%  
   left_join(., plots_sp, by = "plot_id") %>%
-  mutate(n_stems_ge10_ha = n_stems_ge10 / plot_area) %>% 
   dplyr::select(
     plot_id, plot_cluster, longitude_of_centre, latitude_of_centre, 
-    richness, shannon, simpson, evenness, n_stems_ge10_ha, ba_ha, agb_ha,
+    richness, shannon, simpson, evenness, ba_ha, agb_ha,
     mat = bio1, diurnal_temp_range = bio2, map = bio12,
     clay = soil_clay, sand = soil_sand, cec = soil_cation_ex_cap, 
     census_date) %>%  # Select columns
@@ -33,7 +62,6 @@ plots_fil_sf <- plots %>%
     longitude_of_centre = mean(longitude_of_centre, na.rm = TRUE),
     latitude_of_centre = mean(latitude_of_centre, na.rm = TRUE),
     census_date = first(census_date),
-    n_stems_ge10_ha = mean(n_stems_ge10_ha, na.rm = TRUE),
     ba_ha = mean(ba_ha, na.rm = TRUE),
     agb_ha = mean(agb_ha, na.rm = TRUE),
     mat = mean(mat, na.rm = TRUE),
@@ -47,21 +75,13 @@ plots_fil_sf <- plots %>%
   mutate(plot_id_vec = strsplit(as.character(plot_id), split = ",")) %>%  # Make column of plot ID vectors 
   mutate(plot_id_length = sapply(.$plot_id_vec, length))  # Get number of plots in cluster
 
-# Get statistics about sites
-census <- unique(plots_fil_sf$census_date) 
-
-n_total_sites <- plots %>%
-  filter(prinv == "Siampale A.") %>%
-  pull(plot_cluster) %>%
-  unique() %>%
-  length()
-
 # Create plot ID / plot Cluster lookup table
 plot_id_lookup <- plots %>% 
   filter(plot_id %in% unlist(plots_fil_sf$plot_id_vec)) %>%
   dplyr::select(plot_cluster, plot_id)
 
 # Filter stems by plot ID
+# Filter stems to >10 cm DBH
 stem_size <- 10
 stems_fil <- stems %>%
   inner_join(., plot_id_lookup, by = "plot_id") %>%
@@ -71,9 +91,7 @@ stems_fil <- stems %>%
     plot_cluster %in% plots_fil_sf$plot_cluster)
 
 # Summarise to only trees
-# Remove duplicated tree measurements
-# Remove unidentified species
-tree_fil <- stems_fil %>%
+trees <- stems_fil %>%
   filter(!is.na(species_name_clean)) %>%
   group_by(plot_id, tree_id) %>%
   summarise(
@@ -83,6 +101,48 @@ tree_fil <- stems_fil %>%
     ba = sum(ba, na.rm = TRUE),
     agb = sum(agb, na.rm = TRUE))
 
+# Find sites >5 species with >1 individual
+plot_5sp <- trees %>% 
+  group_by(plot_cluster, species_name_clean) %>%
+  tally() %>%
+  filter(n > 1) %>%
+  group_by(plot_cluster) %>%
+  tally() %>%
+  filter(n > 5) %>%
+  pull(plot_cluster)
+
+# Find sites with 4 plots
+plot_4p <- plot_id_lookup %>% 
+  group_by(plot_cluster) %>% 
+  tally() %>%
+  filter(n == 4) %>%
+  pull(plot_cluster)
+
+# Find sites >50 trees ha
+trees_ha <- 50
+plot_50t <- trees %>% 
+  filter(plot_cluster %in% plot_4) %>%
+  group_by(plot_cluster) %>%
+  tally() %>%
+  mutate(t_ha = n / 0.4) %>%
+  filter(t_ha > trees_ha) %>%
+  pull(plot_cluster)
+
+# Find sites with no non-natives
+plot_native <- trees %>% 
+  group_by(plot_cluster) %>%
+  summarise(exotics = ifelse(any(grepl("Pinus|Eucalyptus", species_name_clean)), TRUE, FALSE)) %>%
+  filter(exotics == FALSE) %>% 
+  pull(plot_cluster)
+
+# Filter sites 
+tree_fil <- trees %>%
+  filter(plot_cluster %in% plot_5sp, 
+    plot_cluster %in% plot_4p, 
+    plot_cluster %in% plot_50t, 
+    plot_cluster %in% plot_native)
+
+# How many trees could not be identified?
 ntrees <- length(tree_fil$species_name_clean)
 nspindet <- sum(grepl("indet", tree_fil$species_name_clean) & 
   !grepl("Indet indet", tree_fil$species_name_clean)) 
@@ -91,66 +151,33 @@ nuniquespindet <- length(unique(tree_fil$species_name_clean[grepl("indet", tree_
 ngenindet <- sum(grepl("Indet indet", tree_fil$species_name_clean))
 pergenindet <- ngenindet / ntrees * 100
 
-# How many trees weren't ID'd to species?
-
 # Create tree species abundance matrix by plot cluster
 ba_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
-  species_id = "species_name_clean", abundance = "ba") 
+  species_id = "species_name_clean", abundance = "ba") %>%
+  dplyr::select(-`Indet indet`)
 
-# Occurrence based abundance matrix for filtering
-occ_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
-  species_id = "species_name_clean", abundance = NULL)
+# Filter plots data to match sites in filtered tree data
+plots_clean <- plots_fil_sf %>% 
+  filter(plot_cluster %in% tree_fil$plot_cluster)
 
-# Remove genus level indets 
-ba_clust_mat <- ba_clust_mat[,-which(names(ba_clust_mat) == "Indet indet")]
-
-# Remove plots below 95th percentile of basal area 
-ba_ha_lim <- quantile(plots_fil_sf$ba_ha, 0.05, na.rm = TRUE)
-
-clust_plot_area <- plots_fil_sf$plot_id_length[match(rownames(ba_clust_mat), 
-  plots_fil_sf$plot_cluster)] * 0.1
-ba_clust_ba_ha <- rowSums(ba_clust_mat) / clust_plot_area
-ba_ha_cluster <- row.names(ba_clust_mat[(ba_clust_ba_ha > ba_ha_lim),])
-ba_clust_mat <- ba_clust_mat[row.names(ba_clust_mat) %in% ba_ha_cluster,]
-
-# Remove plots with fewer than 5 species with more than 1 individual
-sp_ab <- unname(apply(occ_clust_mat, 1, function(x) { 
-    sum(x > 1, na.rm = TRUE) 
-  }))
-
-sp_ab_cluster <- row.names(occ_clust_mat[sp_ab >= 5,])
-ba_clust_mat <- ba_clust_mat[row.names(ba_clust_mat) %in% sp_ab_cluster,] 
-
-# Remove species with fewer than 5 total occurrences
-occ_species <- names(occ_clust_mat[,colSums(occ_clust_mat) >= 5])
-ba_clust_mat <- ba_clust_mat[,names(ba_clust_mat) %in% occ_species]
-
-# Exclude species which are clearly non-native
-ba_clust_mat <- ba_clust_mat[,-which(grepl("Pinus|Eucalyptus", names(ba_clust_mat)))] 
-
-# Remove plots with no individuals
-ba_clust_mat <- ba_clust_mat[rowSums(ba_clust_mat) != 0,]
-
-# Clean other abundance matrices based on filtering above 
-plots_clean <- plots_fil_sf[plots_fil_sf$plot_cluster %in% rownames(ba_clust_mat),]
-occ_clust_mat_clean <- occ_clust_mat[row.names(occ_clust_mat) %in% row.names(ba_clust_mat), 
-  names(occ_clust_mat) %in% names(ba_clust_mat)]
+# Are all plots in both objects?
+stopifnot(nrow(ba_clust_mat) == nrow(plots_clean))
 
 # Write files
 saveRDS(plots_clean, "dat/plots.rds")
 saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 saveRDS(ba_clust_mat, "dat/ba_clust_mat.rds")
-saveRDS(occ_clust_mat_clean, "dat/occ_clust_mat.rds")
 
 # Write stats to .tex
 write(
   c(
-    commandOutput(ba_ha_lim, "baLim"),
     commandOutput(stem_size, "stemSize"),
     commandOutput(census, "censusDate"),
     commandOutput(n_total_sites, "nTotalSites"),
     commandOutput(ntrees, "nTrees"),
+    commandOutput(trees_ha, "treesHa"),
     commandOutput(perspindet, "perSpIndet"),
     commandOutput(pergenindet, "perGenIndet")
     ),
   file = "out/data_prep_vars.tex")
+

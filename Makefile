@@ -16,19 +16,20 @@ all : $(TEXFILE).pdf
 # R scripts
 
 # Data prep
-$(DATDIR)/plots.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex $(DATDIR)/ba_clust_mat.rds : data_prep.R $(DATDIR)/plots_v2.7.csv
+$(DATDIR)/plots.rds $(DATDIR)/sites_loc.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex $(DATDIR)/ba_clust_mat.rds : data_prep.R $(DATDIR)/plots_v2.7.csv
 	Rscript $<
+# Feeds into modis_get.R, trmm_get.R, try_get.R
 
 # MODIS extract
-$(IMGDIR)/ts_example.pdf $(DATDIR)/plots_phen.rds $(OUTDIR)/modis_extract_vars.tex : modis_extract.R functions.R $(DATDIR)/plots.rds $(DATDIR)/vipphen.rds $(DATDIR)/evi.rds
+$(IMGDIR)/ts_example.pdf $(DATDIR)/plots_phen.rds $(OUTDIR)/modis_extract_vars.tex : modis_extract.R functions.R $(DATDIR)/plots.rds $(DATDIR)/vipphen.rds $(DATDIR)/evi.rds modis_get.R
 	Rscript $<
 
 # TRMM extract
-$(DATDIR)/plots_trmm.rds $(OUTDIR)/trmm_extract_vars.tex : trmm_extract.R functions.R $(DATDIR)/plots_phen.rds $(DATDIR)/trmm.rds
+$(DATDIR)/plots_trmm.rds $(OUTDIR)/trmm_extract_vars.tex : trmm_extract.R functions.R $(DATDIR)/plots_phen.rds $(DATDIR)/trmm.rds trmm_get.R
 	Rscript $<
 
 # TRY extract
-$(DATDIR)/plots_try.rds : try_extract.R $(DATDIR)/plots_trmm.rds $(DATDIR)/ba_clust_mat.rds
+$(DATDIR)/plots_try.rds : try_extract.R $(DATDIR)/plots_trmm.rds $(DATDIR)/ba_clust_mat.rds try_get.R $(DATDIR)/traits_sp.rds
 	Rscript $<
 
 # Diversity

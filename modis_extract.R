@@ -22,12 +22,16 @@ plots <- readRDS("dat/plots.rds")
 vipphen <- readRDS("dat/vipphen.rds")
 evi_ts_df <- readRDS("dat/evi.rds")
 
-# Are all plots in the EVI time series data?
-stopifnot(all(plots$plot_cluster %in% evi_ts_df$plot_cluster))
-
 # Clean raw ts
 evi_ts_clean <- evi_ts_df %>%
-  filter(evi > 0)
+  filter(evi > 0) %>%
+  filter(plot_cluster %in% plots$plot_cluster)
+
+plots_clean <- plots %>%
+  filter(plot_cluster %in% evi_ts_clean$plot_cluster)
+
+# Are all plots in the EVI time series data?
+stopifnot(all(plots_clean$plot_cluster %in% evi_ts_clean$plot_cluster))
 
 # Decompose annual time series - at September, with 2 month overlap on both ends
 evi_ts_list <- split(evi_ts_clean, evi_ts_clean$plot_cluster)
@@ -276,7 +280,7 @@ phen_df_fil$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
   sum(diff(gam_fil[[x]][["doy"]]) * rollmean(gam_fil[[x]][["pred"]], 2))
 }))
 
-phen_all <- plots %>%
+phen_all <- plots_clean %>%
   left_join(., phen_df_fil, by = "plot_cluster") %>%
   left_join(., vipphen, by = "plot_cluster") %>%
   filter(vipphen_n_seasons < 2) %>%
@@ -338,8 +342,6 @@ stat_plot <- function(x, raw = FALSE, title = TRUE) {
 
 sam <- sample(seq(length(gam_list_fil)), 50)
 ts_stat_plot_list <- lapply(sam, stat_plot) 
-
-stat_plot(which(names(gam_list) == "ZIS_2774"), raw = TRUE)
 
 pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)
 grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
