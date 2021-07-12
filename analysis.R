@@ -87,7 +87,6 @@ dat_nogeom %>%
   theme_panel()
 dev.off()
 
-
 # PCA of phenological metrics by plot and community
 phen_pca <- prcomp(dat_nogeom[,names(resp_lookup)], 
   center = TRUE, scale. = TRUE)
@@ -119,32 +118,32 @@ dev.off()
 # Create bivariate relationships plot
 bivar_list <- c(
   "cum_vi ~ eff_rich",
-  "cum_vi ~ n_stems_gt10_ha",
+  "cum_vi ~ n_stems_ge10_ha",
   "cum_vi ~ map",
   "cum_vi ~ diurnal_temp_range",
 
   "s1_length ~ eff_rich",
-  "s1_length ~ n_stems_gt10_ha",
+  "s1_length ~ n_stems_ge10_ha",
   "s1_length ~ map",
   "s1_length ~ diurnal_temp_range",
 
   "s1_green_rate ~ eff_rich",
-  "s1_green_rate ~ n_stems_gt10_ha",
+  "s1_green_rate ~ n_stems_ge10_ha",
   "s1_green_rate ~ map",
   "s1_green_rate ~ diurnal_temp_range",
 
   "s1_senes_rate ~ eff_rich",
-  "s1_senes_rate ~ n_stems_gt10_ha",
+  "s1_senes_rate ~ n_stems_ge10_ha",
   "s1_senes_rate ~ map",
   "s1_senes_rate ~ diurnal_temp_range",
 
   "start_lag ~ eff_rich",
-  "start_lag ~ n_stems_gt10_ha",
+  "start_lag ~ n_stems_ge10_ha",
   "start_lag ~ map",
   "start_lag ~ diurnal_temp_range", 
 
   "end_lag ~ eff_rich",
-  "end_lag ~ n_stems_gt10_ha",
+  "end_lag ~ n_stems_ge10_ha",
   "end_lag ~ map",
   "end_lag ~ diurnal_temp_range"
 )
