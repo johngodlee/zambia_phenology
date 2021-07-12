@@ -52,6 +52,7 @@ plots_fil_sf <- plots_iluaii %>%
   left_join(., plots_sp, by = "plot_id") %>%
   dplyr::select(
     plot_id, plot_cluster, longitude_of_centre, latitude_of_centre, 
+    plot_area, n_stems_ge10,
     richness, shannon, simpson, evenness, ba_ha, agb_ha,
     mat = bio1, diurnal_temp_range = bio2, map = bio12,
     clay = soil_clay, sand = soil_sand, cec = soil_cation_ex_cap, 
@@ -64,6 +65,8 @@ plots_fil_sf <- plots_iluaii %>%
     census_date = first(census_date),
     ba_ha = mean(ba_ha, na.rm = TRUE),
     agb_ha = mean(agb_ha, na.rm = TRUE),
+    n_stems_ge10_ha = mean(n_stems_ge10, na.rm = TRUE) / 
+      sum(plot_area, na.rm = TRUE),
     mat = mean(mat, na.rm = TRUE),
     diurnal_temp_range = mean(diurnal_temp_range, na.rm = TRUE),
     map = mean(map, na.rm = TRUE),
@@ -121,7 +124,7 @@ plot_4p <- plot_id_lookup %>%
 # Find sites >50 trees ha
 trees_ha <- 50
 plot_50t <- trees %>% 
-  filter(plot_cluster %in% plot_4) %>%
+  filter(plot_cluster %in% plot_4p) %>%
   group_by(plot_cluster) %>%
   tally() %>%
   mutate(t_ha = n / 0.4) %>%

@@ -2,7 +2,7 @@
 pred_lookup <- c("Richness", "Evenness", "Stem density",  
   "MAP", "Wet season precip.", "Pre-green-up precip.", "Pre-senescence precip.",
     "Vegetation type", "Diurnal dT")
-names(pred_lookup) <- c("eff_rich", "evenness", "n_stems_gt10_ha",
+names(pred_lookup) <- c("eff_rich", "evenness", "n_stems_ge10_ha",
   "map", "cum_precip_seas", "cum_precip_pre", "cum_precip_end",
   "cluster", "diurnal_temp_range")
 
@@ -166,82 +166,6 @@ corrPlot <- function(x, col = c("blue", "white", "red"), ...) {
     ggplot2::labs(x = "", y = "") + 
     ggplot2::coord_equal() +
     ggplot2::theme(legend.position = "none")
-}
-
-# ggplot2 convex hulls
-# Here's the stat_
-StatBag <- ggplot2::ggproto("Statbag", ggplot2::Stat,
-                   compute_group = function(data, scales, prop = 0.5) {
-
-                     #################################
-                     #################################
-                     # originally from aplpack package, plotting functions removed
-                     plothulls_ <- function(x, y, fraction, n.hull = 1,
-                                            col.hull, lty.hull, lwd.hull, density=0, ...){
-                       # function for data peeling:
-                       # x,y : data
-                       # fraction.in.inner.hull : max percentage of points within the hull to be drawn
-                       # n.hull : number of hulls to be plotted (if there is no fractiion argument)
-                       # col.hull, lty.hull, lwd.hull : style of hull line
-                       # plotting bits have been removed, BM 160321
-                       # pw 130524
-                       if(ncol(x) == 2){ y <- x[,2]; x <- x[,1] }
-                       n <- length(x)
-                       if(!missing(fraction)) { # find special hull
-                         n.hull <- 1
-                         if(missing(col.hull)) col.hull <- 1
-                         if(missing(lty.hull)) lty.hull <- 1
-                         if(missing(lwd.hull)) lwd.hull <- 1
-                         x.old <- x; y.old <- y
-                         idx <- chull(x,y); x.hull <- x[idx]; y.hull <- y[idx]
-                         for( i in 1:(length(x)/3)){
-                           x <- x[-idx]; y <- y[-idx]
-                           if( (length(x)/n) < fraction ){
-                             return(cbind(x.hull,y.hull))
-                           }
-                           idx <- chull(x,y); x.hull <- x[idx]; y.hull <- y[idx];
-                         }
-                       }
-                       if(missing(col.hull)) col.hull <- 1:n.hull
-                       if(length(col.hull)) col.hull <- rep(col.hull,n.hull)
-                       if(missing(lty.hull)) lty.hull <- 1:n.hull
-                       if(length(lty.hull)) lty.hull <- rep(lty.hull,n.hull)
-                       if(missing(lwd.hull)) lwd.hull <- 1
-                       if(length(lwd.hull)) lwd.hull <- rep(lwd.hull,n.hull)
-                       result <- NULL
-                       for( i in 1:n.hull){
-                         idx <- chull(x,y); x.hull <- x[idx]; y.hull <- y[idx]
-                         result <- c(result, list( cbind(x.hull,y.hull) ))
-                         x <- x[-idx]; y <- y[-idx]
-                         if(0 == length(x)) return(result)
-                       }
-                       result
-                     } # end of definition of plothulls
-                     #################################
-
-
-                     # prepare data to go into function below
-                     the_matrix <- matrix(data = c(data$x, data$y), ncol = 2)
-
-                     # get data out of function as df with names
-                     setNames(data.frame(plothulls_(the_matrix, fraction = prop)), nm = c("x", "y"))
-                     # how can we get the hull and loop vertices passed on also?
-                   },
-
-                   required_aes = c("x", "y")
-)
-
-# Here's the stat_ function
-#' @inheritParams ggplot2::stat_identity
-#' @param prop Proportion of all the points to be included in the bag (default is 0.5)
-stat_bag <- function(mapping = NULL, data = NULL, geom = "polygon",
-                     position = "identity", na.rm = FALSE, show.legend = NA, 
-                     inherit.aes = TRUE, prop = 0.5, alpha = 0.3, ...) {
-  layer(
-    stat = StatBag, data = data, mapping = mapping, geom = geom, 
-    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
-    params = list(na.rm = na.rm, prop = prop, alpha = alpha, ...)
-  )
 }
 
 # Get convex hull of 2D points

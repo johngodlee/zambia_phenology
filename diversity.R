@@ -3,16 +3,14 @@
 # 2020-09-02
 
 # Packages
+library(dplyr)
 library(tidyr)
+library(tibble)
+library(ggplot2)
 library(sf)
 library(vegan)
-library(ade4)
-library(ggplot2)
 library(cluster)
 library(labdsv)
-library(shades)
-library(tibble)
-library(ggdendro)
 library(taxize)
 
 source("functions.R")
@@ -65,7 +63,7 @@ sp_tax$subfamily <- unlist(lapply(1:length(split_taxon), function(x) {
   gsub("^$", NA, split_taxon[[x]][subfam_locs[x]])
 }))
 
-# Write species information file
+# Write species information to file
 saveRDS(sp_tax, "dat/sp_taxon.rds")
 
 # Calculate common diversity statistics
@@ -79,7 +77,7 @@ div_df <- data.frame(plot_cluster = row.names(ba_clust_mat),
 # based on Shannon calculated by weighting on basal area.
 div_df$eff_rich <- exp(div_df$shannon)
 
-# Gather matrix to dataframe
+# Gather basal area matrix to dataframe
 ba_gather <- ba_clust_mat %>%
   rownames_to_column("plot_cluster") %>%
   gather(species, ba, -plot_cluster) %>%
@@ -90,64 +88,66 @@ ba_gather <- ba_clust_mat %>%
 # Split by plot_cluster
 ba_split <- split(ba_gather, ba_gather$plot_cluster)
 
-# For each plot_cluster, dominant species by basal area
-dom_sp <- do.call(rbind, lapply(ba_split, function(x) {
-  ba_total <- sum(x$ba, na.rm = TRUE)
-  x_order <- x[order(x$ba, decreasing = TRUE),]
-  x_fil <- x_order[1:5,]
-  x_fil$prop <- x_fil$ba / ba_total
-  x_fil$id <- 1:5
-  x_spread <- pivot_wider(x_fil, names_from = id, 
-    values_from = c("species", "ba", "prop")) %>%
-    filter(!is.na(plot_cluster))
-  x_spread$ba_total <- ba_total
+# For each plot_cluster, dominant species and genera by basal area
+dom_sp <- ba_gather %>% 
+  group_by(plot_cluster) %>%
+  mutate(species_prop = ba / sum(ba, na.rm = TRUE)) %>%
+  slice_max(order_by = ba, n = 5) %>%
+  rename(species_ba = ba ) %>%
+  mutate(id = row_number()) %>%
+  pivot_wider(names_from = id,
+    values_from = c("species", "species_ba", "species_prop")) 
 
-  return(x_spread)
-}))
+dom_sp$species_family_1 <- sp_tax[match(dom_sp$species_1, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$species_family_2 <- sp_tax[match(dom_sp$species_2, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$species_family_3 <- sp_tax[match(dom_sp$species_3, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$species_family_4 <- sp_tax[match(dom_sp$species_4, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$species_family_5 <- sp_tax[match(dom_sp$species_5, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$species_subfamily_1 <- sp_tax[match(dom_sp$species_1, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$species_subfamily_2 <- sp_tax[match(dom_sp$species_2, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$species_subfamily_3 <- sp_tax[match(dom_sp$species_3, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$species_subfamily_4 <- sp_tax[match(dom_sp$species_4, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_sp$species_subfamily_5 <- sp_tax[match(dom_sp$species_5, sp_tax$user_supplied_name), "subfamily"][[1]]
 
-# Join families
-dom_sp$family_1 <- sp_tax[match(dom_sp$species_1, sp_tax$user_supplied_name), "family"][[1]]
-dom_sp$family_2 <- sp_tax[match(dom_sp$species_2, sp_tax$user_supplied_name), "family"][[1]]
-dom_sp$family_3 <- sp_tax[match(dom_sp$species_3, sp_tax$user_supplied_name), "family"][[1]]
-dom_sp$family_4 <- sp_tax[match(dom_sp$species_4, sp_tax$user_supplied_name), "family"][[1]]
-dom_sp$family_5 <- sp_tax[match(dom_sp$species_5, sp_tax$user_supplied_name), "family"][[1]]
+dom_sp$species_prop_1_cum <- dom_sp$species_prop_1
+dom_sp$species_prop_2_cum <- dom_sp$species_prop_1 + dom_sp$species_prop_2
+dom_sp$species_prop_3_cum <- dom_sp$species_prop_2 + dom_sp$species_prop_3
+dom_sp$species_prop_4_cum <- dom_sp$species_prop_3 + dom_sp$species_prop_4
+dom_sp$species_prop_5_cum <- dom_sp$species_prop_4 + dom_sp$species_prop_5
 
-# Join subfamilies
-dom_sp$subfamily_1 <- sp_tax[match(dom_sp$species_1, sp_tax$user_supplied_name), "subfamily"][[1]]
-dom_sp$subfamily_2 <- sp_tax[match(dom_sp$species_2, sp_tax$user_supplied_name), "subfamily"][[1]]
-dom_sp$subfamily_3 <- sp_tax[match(dom_sp$species_3, sp_tax$user_supplied_name), "subfamily"][[1]]
-dom_sp$subfamily_4 <- sp_tax[match(dom_sp$species_4, sp_tax$user_supplied_name), "subfamily"][[1]]
-dom_sp$subfamily_5 <- sp_tax[match(dom_sp$species_5, sp_tax$user_supplied_name), "subfamily"][[1]]
+dom_gen <- ba_gather %>% 
+  mutate(genus = gsub(" .*", "", species)) %>%
+  group_by(plot_cluster, genus) %>%
+  summarise(genus_ba = sum(ba, na.rm = TRUE)) %>%
+  group_by(plot_cluster) %>%
+  mutate(genus_prop = genus_ba / sum(genus_ba, na.rm = TRUE)) %>%
+  slice_max(order_by = genus_ba, n = 5) %>%
+  mutate(id = row_number()) %>%
+  pivot_wider(names_from = id,
+    values_from = c("genus", "genus_ba", "genus_prop")) 
 
-# Calculate cumulative proportions
-dom_sp$prop_1_cum <- dom_sp$prop_1
-dom_sp$prop_2_cum <- dom_sp$prop_1 + dom_sp$prop_2
-dom_sp$prop_3_cum <- dom_sp$prop_2 + dom_sp$prop_3
-dom_sp$prop_4_cum <- dom_sp$prop_3 + dom_sp$prop_4
-dom_sp$prop_5_cum <- dom_sp$prop_4 + dom_sp$prop_5
+dom_sp_gen <- full_join(dom_sp, dom_gen, "plot_cluster")
 
-# Gather dominant species dataframe
-dom_gather <- dom_sp %>% 
-  dplyr::select(plot_cluster, starts_with("species_")) %>%
-  gather(dom, species, -plot_cluster, -ends_with("_cum")) %>%
-  arrange(plot_cluster) %>%
-  dplyr::select(-dom)
+# Abundance matrix by dominant genera only
+dom_gen_gather <- dom_gen %>%
+  dplyr::select(1:6) %>%
+  gather(key, genus, -plot_cluster) %>% 
+  dplyr::select(-key)
 
-# Subset abundance matrix to only include dominant species per plot
 ba_dom_mat <- ba_gather %>%
-  inner_join(., dom_gather, by = c("plot_cluster", "species")) %>%
-  spread(species, ba) %>%
+  mutate(genus = gsub(" .*", "", species)) %>%
+  dplyr::select(-species) %>%
+  group_by(plot_cluster, genus) %>%
+  mutate(ba = sum(ba, na.rm = TRUE)) %>%
+  inner_join(., dom_gen_gather, by = c("plot_cluster", "genus")) %>%
+  distinct() %>%
+  spread(genus, ba) %>%
   column_to_rownames("plot_cluster") %>%
-  mutate(across(everything(), ~if_else(is.na(.x), 0, .x)))
-
-# Check that dataframes are same size
-stopifnot( nrow(ba_dom_mat[rowSums(ba_dom_mat) != 0,]) == 
-  nrow(ba_clust_mat) )
-stopifnot( ncol(dim(ba_dom_mat[,colSums(ba_dom_mat, na.rm = TRUE) != 0])) == 
-  ncol(ba_clust_mat) )
+  mutate(across(everything(), ~if_else(is.na(.x), 0, .x))) %>% 
+  dplyr::select(which(colSums(.) > 0))
 
 # Construct distance matrix
-ba_dist <- vegan::vegdist(ba_clust_mat)
+ba_dist <- vegan::vegdist(ba_dom_mat)
 
 # Ward distance
 beta_ward <- hclust(ba_dist, method = "ward.D2")
@@ -188,106 +188,43 @@ sil_mean <- unlist(lapply(sil_out, function(x) {
   }
 }))
 
+clust_optim <- nclust[sil_mean == max(sil_mean, na.rm = TRUE) & !is.na(sil_mean)]
+clust_optim <- 4
+
 # Create silhouette plot
 pdf(file = "img/ward_sil.pdf", width = 6, height = 4)
 ggplot() + 
   geom_point(aes(y = sil_mean, x = nclust)) + 
   geom_line(aes(y = sil_mean, x = nclust)) + 
+  geom_vline(xintercept = clust_optim, linetype = 2) + 
   theme_bw() + 
   labs(x = "N clusters", y = "Mean silhouette width")
 dev.off()
 
-# Create dataframe of dominant species
+# Create dataframe of dominant species per cluster for numbers of clusters
 dom_out <- do.call(rbind, lapply(dom_all, "[[", 2))
+
+# Extract cluster of each plot per number of clusters
 clust_out <- Reduce( function(...) { merge(..., by = "plot_cluster") }, 
   lapply(dom_all, "[[", 1) )
 
-# NSCA on basal area data
-naxes <- 2
-nsca <- dudi.nsc(df = ba_clust_mat, scannf = FALSE, nf = naxes)
-
-nsca_inertia <- round(nsca$eig[naxes+1], 2) * 10
-
-# Extract euclidean distances between plots from NSCA
-nsca_dist <- dist(nsca$li)
-
-# Determine optimal number of clusters for hieriarchical clustering
-kval <- seq(2,10)
-
-v <- unlist(lapply(seq(length(kval)), function(x) {
-    clust <- hclust(nsca_dist, method = "ward.D2")
-    clust_cut <- cutree(clust, k = kval[x])
-    ss <- cluster::silhouette(clust_cut, nsca_dist)
-    mean(ss[, 3])
-}))
-
-sil <- data.frame(kval, v)
-
-n_clusters <- sil$kval[which.max(sil$v)]
-
-# Silhouette plot
-pdf(file = "img/nsca_sil.pdf", width = 6, height = 4)
-ggplot(sil, aes(x = kval, y = v)) + 
-  geom_point() + 
-  geom_path() + 
-  geom_vline(xintercept = n_clusters, linetype = 2) +
-  theme_panel() + 
-  labs(x = "N clusters", y = "Mean silhouette width") 
-dev.off()
-
-# Cluster euclidean distances of NSCA with ward algorithm
-ward_clust <- hclust(nsca_dist, method = "ward.D2")
-ward_dat <- dendro_data(ward_clust)
-
-plot.new()
-clust_classif <- rect.hclust(ward_clust, k = n_clusters)
-nsca_df <- do.call(rbind, lapply(seq(length(clust_classif)), function(x) {
-  data.frame(plot_cluster = names(clust_classif[[x]]), cluster = as.character(x))
-}))
-
-ward_merge <- left_join(ward_dat$labels, nsca_df, by = c("label" = "plot_cluster"))
-
-ward_rect <- ward_merge %>% 
-  group_by(cluster) %>%
-  summarise(xmin = min(x)+1, 
-    xmax = max(x)-1) %>%
-  mutate(ymin = 0, ymax = 3,
-    cluster = factor(cluster, 
-      labels = clust_lookup[1:length(unique(.$cluster))]))
-
-# Dendrogram with clusters
-pdf(file = "img/clust_dendro.pdf", width = 8, height = 5)
-ggplot() + 
-  geom_segment(data = ward_dat$segments, 
-    aes(x = x, y = y, xend = xend, yend = yend)) + 
-  geom_rect(data = ward_rect, 
-    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, colour = cluster),
-    size = 1.2, fill = NA) + 
-  theme_panel() + 
-  scale_colour_manual(values = clust_pal)
-dev.off()
-
-# Extract data from clustering and NSCA
-nsc_df <- ward_merge %>%
-  dplyr::select(plot_cluster = label, cluster) %>%
-  left_join(., rownames_to_column(nsca$l1), by = c("plot_cluster" = "rowname")) %>%
-  mutate(cluster = as.character(cluster))
+clust_best <- clust_out[,c("plot_cluster", paste0("c", clust_optim))]
 
 # Indicator species per cluster
-clust_indval <- indval(ba_clust_mat, clustering = nsc_df$cluster)
+clust_indval <- indval(ba_dom_mat, clustering = clust_best[[paste0("c", clust_optim)]])
 
 # Summarise indicator analysis
-summary(clust_indval, p = 0.05, type = "short", digits = 2, show = p)
 clust_indval$indval$sp <- row.names(clust_indval$indval)
 row.names(clust_indval$indval) <- seq(from = 1, to = length(clust_indval$indval$sp))
 
-nsc_indval_extrac <- lapply(1:n_clusters, function(x) {
-    out <- head(clust_indval$indval[order(clust_indval$indval[[x]], 
-          decreasing = TRUE),c(n_clusters+1, x)])
+indval_extrac <- lapply(1:clust_optim, function(x) {
+    out <- head(clust_indval$indval[
+      order(clust_indval$indval[[x]], decreasing = TRUE),
+      c(clust_optim+1, x)])
     out[!grepl("indet", out$sp, ignore.case = TRUE),]
   })
 
-nsc_indval_extrac_tidy <- do.call(rbind, lapply(nsc_indval_extrac, function(x) {
+indval_extrac_tidy <- do.call(rbind, lapply(indval_extrac, function(x) {
     cluster <- names(x)[2]
     out <- x[1:3,]
     out$cluster <- cluster
@@ -295,27 +232,6 @@ nsc_indval_extrac_tidy <- do.call(rbind, lapply(nsc_indval_extrac, function(x) {
     out[,c(3,1,2)]
   })
 )
-
-# Combine clusters 1 and 3 based on indicator values?
-
-# NSCA ordination plot with clusters
-nsc_hull <- findHull(nsc_df, "RS1", "RS2", group = "cluster")
-
-pdf(file = "img/nsca.pdf", width = 12, height = 6)
-ggplot() +
-  geom_polygon(data = nsc_hull, 
-    aes(x = RS1, y = RS2, colour = cluster), fill = NA) + 
-  geom_polygon(data = nsc_hull, 
-    aes(x = RS1, y = RS2, fill = cluster), colour = NA, alpha = 0.5) + 
-  geom_point(data = nsc_df, aes(x = RS1, y = RS2, fill = cluster), 
-    shape = 21, size = 2) +
-  scale_fill_manual(name = "Cluster", values = clust_pal) +
-  scale_colour_manual(name = "Cluster", values = brightness(clust_pal, 0.5),
-    limits = unique(nsc_df$cluster)) + 
-  theme_panel() +
-  labs(x = "NSC 1", y = "NSC 2")
-dev.off()
-
 
 # How many of top n dominant species make up percentages of basal area?
 pdf(file = "img/basal_area_dom_hist.pdf", width = 10, height = 8)
@@ -349,24 +265,10 @@ cons_acq <- plots %>%
 cons_acq_gen <- cons_acq %>%
   dplyr::select(plot_cluster, contains("_genus_cwm"))
 
-cons_acq_sp <- cons_acq %>%
-  dplyr::select(plot_cluster, !contains("_genus_cwm"))
-
-# PCA of community weighted means of traits
-cons_pca_sp <- prcomp(cons_acq_sp[,-which(names(cons_acq_sp) == "plot_cluster")], 
-  center = TRUE, scale. = TRUE)
-
 cons_pca_gen <- prcomp(cons_acq_gen[,-which(names(cons_acq_gen) == "plot_cluster")], 
   center = TRUE, scale. = TRUE)
 
 # Extract PCA values from each PCA
-cons_pca_sp_tidy <- as.data.frame(cons_pca_sp$x) %>%
-  mutate(plot_cluster = cons_acq_sp$plot_cluster) %>%
-  rename_with(~gsub("PC", "sp_pc", .x), starts_with("PC"))
-
-cons_pca_sp_arrows <- data.frame(x = rownames(cons_pca_sp$rotation), 
-  cons_pca_sp$rotation)
-
 cons_pca_gen_tidy <- as.data.frame(cons_pca_gen$x) %>%
   mutate(plot_cluster = cons_acq_gen$plot_cluster) %>%
   rename_with(~gsub("PC", "gen_pc", .x), starts_with("PC"))
@@ -374,36 +276,14 @@ cons_pca_gen_tidy <- as.data.frame(cons_pca_gen$x) %>%
 cons_pca_gen_arrows <- data.frame(x = rownames(cons_pca_gen$rotation), 
   cons_pca_gen$rotation)
 
-cons_pca_sp_df <- dom_sp %>%
-  left_join(., cons_pca_sp_tidy, by = "plot_cluster")
+cons_pca_gen_df <- dom_gen %>%
+  left_join(., cons_pca_gen_tidy, by = "plot_cluster")
 
-cons_pca_gen_df <- dom_sp %>%
-  left_join(., cons_pca_gen_tidy, by = "plot_cluster") %>%
-  mutate(genus_1 = unlist(lapply(strsplit(species_1, " "), "[", 1)))
-
-# Plots of PCAs
-# Species PCA
-pdf(file = "img/cons_pca_sp.pdf", width = 20, height = 12)
-ggplot() + 
-  geom_point(data = cons_pca_sp_df, 
-    aes(x = sp_pc1, y = sp_pc2, fill = species_1, size = prop_1, shape = species_1),
-    colour = "black") +
-  geom_segment(data = cons_pca_sp_arrows, aes(x = 0, y = 0, xend = (PC1*5),
-    yend = (PC2*5)), arrow = arrow(length = unit(1/2, "picas")),
-    color = "black") +
-  geom_label(data = cons_pca_sp_arrows, aes(x = (PC1*4), y = (PC2*4),
-    label = x)) + 
-  scale_shape_manual(values = rep(21:25, times = 14)) + 
-  scale_fill_manual(values = rep(clust_pal, times = 14)) + 
-  theme_bw() + 
-  guides(fill = guide_legend(override.aes = list(size = 5))) 
-dev.off()
-
-# Genus PCA
+# Genus PCA plot
 pdf(file = "img/cons_pca_gen.pdf", width = 20, height = 12)
 ggplot() + 
   geom_point(data = cons_pca_gen_df, 
-    aes(x = gen_pc1, y = gen_pc2, fill = genus_1, size = prop_1, shape = genus_1), 
+    aes(x = gen_pc1, y = gen_pc2, fill = genus_1, size = genus_prop_1, shape = genus_1), 
     colour = "black") + 
   geom_segment(data = cons_pca_gen_arrows, aes(x = 0, y = 0, xend = (PC1*5),
     yend = (PC2*5)), arrow = arrow(length = unit(1/2, "picas")),
@@ -420,9 +300,24 @@ dev.off()
 plots_div <- plots %>%
   left_join(., div_df, by = "plot_cluster") %>%  # Diversity stats
   left_join(., dom_sp, by = "plot_cluster") %>%  # Dominant species
-  left_join(., nsc_df, by = "plot_cluster") %>%  # NSCA clusters and axes
-  left_join(., cons_pca_sp_tidy, by = "plot_cluster") %>%  # Species PCA cons-acq
-  left_join(., cons_pca_gen_tidy, by = "plot_cluster")  # Genus PCA cons-acq
+  left_join(., clust_best, by = "plot_cluster") %>%  # Ward clusters 
+  left_join(., cons_pca_gen_tidy, by = "plot_cluster") %>%  # Genus PCA cons-acq 
+  rename(cluster = paste0("c", clust_optim))
+
+pdf(file = "img/cons_pca_clust.pdf", width = 8, height = 5)
+ggplot() + 
+  geom_point(data = plots_div, 
+    aes(x = gen_pc1, y = gen_pc2, 
+      colour = as.character(cluster))) + 
+  geom_segment(data = cons_pca_gen_arrows, aes(x = 0, y = 0, xend = (PC1*5),
+    yend = (PC2*5)), arrow = arrow(length = unit(1/2, "picas")),
+    color = "black") +
+  geom_label(data = cons_pca_gen_arrows, aes(x = (PC1*4), y = (PC2*4),
+    label = x)) + 
+  theme_bw() + 
+  guides(fill = guide_legend(override.aes = list(size = 5)))
+dev.off()
+
 
 # Check no duplications or removals
 stopifnot(nrow(plots) == nrow(plots_div))
