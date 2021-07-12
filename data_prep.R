@@ -176,8 +176,8 @@ write(
     commandOutput(n_total_sites, "nTotalSites"),
     commandOutput(ntrees, "nTrees"),
     commandOutput(trees_ha, "treesHa"),
-    commandOutput(perspindet, "perSpIndet"),
-    commandOutput(pergenindet, "perGenIndet")
+    commandOutput(round(perspindet, 1), "perSpIndet"),
+    commandOutput(round(pergenindet, 1), "perGenIndet")
     ),
   file = "out/data_prep_vars.tex")
 
