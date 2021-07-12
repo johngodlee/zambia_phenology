@@ -9,29 +9,18 @@
 \parskip 0.15cm % Paragraph spacing
 \setlength{\parindent}{0cm} % No paragraph indenting
 
-\usepackage{pdflscape} % Landscape pages
-
 % Text formatting
 \usepackage[T1]{fontenc} % Set font
-
 \usepackage{lineno} % Line numbers
-
-\usepackage{amssymb} % Symbols
-
 \linespread{1.5} % Linespacing
 
-\usepackage{xcolor}
-\newcommand{\TODO}[1]{\textcolor{red}{\textbf{#1}}}  % todonote
-
-% Tables
+\usepackage{amssymb}
 \usepackage{multirow}
 \setlength{\tabcolsep}{4pt} % Default table column sep width 
 
 % Image handling
 \usepackage{graphicx} 
-
 \graphicspath{ {img/} } % Define image path
-
 \usepackage{float} % Precise figure location
 
 % Bibliography management
@@ -39,6 +28,7 @@
 \addbibresource{phenology.bib}
 
 % Links within document, nice figure formatting
+\usepackage{xcolor}
 \usepackage[breaklinks]{hyperref}
 \definecolor{links}{RGB}{0,0,0}
 \hypersetup{
@@ -66,12 +56,9 @@
 % Variables
 \input{out/vars.tex}
 
-% Title
-\newcommand{\titletext}{Phenology and diversity in Zambia}
-
 \begin{document}
 
-{\Large{Title: \titletext{}}}
+{\Large{Title: Phenology and diversity in Zambia}}
 
 Authors: Godlee J. L.\textsuperscript{1}, Ryan C. M.\textsuperscript{1}, Siampale A.\textsuperscript{2}, Dexter K. G.\textsuperscript{1,3}
 
@@ -100,9 +87,6 @@ The data used in this study are held by the Zambian Integrated Land Use Assessme
 
 \newpage{}
 \linenumbers
-
-{\Large{Main Text}}\\
-{\Large{Title: \titletext{}}}
 
 \section*{Abstract}
 
@@ -232,7 +216,7 @@ Our coverage of very short season lengths in Zambia, as estimated by the VIPPHEN
 
 It is important to note that the remotely sensed EVI measurements used here aren't specific only to trees, they represent the landscape as a singe unit. Nevertheless, seasonal patterns of tree leaf phenology in southern African deciduous woodlands, particularly the pre-rainy season green-up phenomenon, is driven almost exclusively by trees, while grasses tend to follow patterns of precipitation more closely \citep{}. Grasses contribute to gross primary productivity, and it was therefore in our interests to include their response in our analysis as we seek to demonstrate how tree species richness can affect cycles of carbon exchange. Additionally, the micro-climatic effects of tree leaf canopy coverage and hydraulic lift through tree deep root systems will benefit the productivity of grasses as well as understorey tree individuals.
 
-It is possible that not all tree individuals in our dataset exhibited a completely deciduous growth pattern. Some highly conservative species in this region remain evergreen throughout the dry season. \TODO{MORE}.
+It is possible that not all tree individuals in our dataset exhibited a completely deciduous growth pattern. Some highly conservative species in this region remain evergreen throughout the dry season.
 
 \section{Conclusion}
 
