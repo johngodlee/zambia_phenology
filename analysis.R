@@ -34,9 +34,11 @@ dat_clean <- dat %>%
     cluster = factor(cluster, 
       labels = clust_lookup[1:length(unique(dat$cluster))]),
     start_lag = -(s1_start - trmm_start),
-    end_lag = s1_end - trmm_end)
+    end_lag = s1_end - trmm_end,
+    cum_vi = cum_vi / 100000)
 
-dat_nogeom <- st_drop_geometry(dat_clean)
+dat_nogeom <- st_drop_geometry(dat_clean) %>%
+  filter(plot_cluster != "ZIS_1232")
   
 # Create density distributions of season start and end dates
 start_dens_plot <- dat_nogeom %>%
@@ -92,7 +94,7 @@ phen_pca <- prcomp(dat_nogeom[,names(resp_lookup)],
   center = TRUE, scale. = TRUE)
 
 phen_pca_tidy <- as.data.frame(phen_pca$x) %>%
-  bind_cols(dat_clean)
+  bind_cols(dat_nogeom)
 
 phen_pca_hulls <- findHull(phen_pca_tidy, "PC1", "PC2", "cluster")
 
@@ -121,31 +123,37 @@ bivar_list <- c(
   "cum_vi ~ n_stems_ge10_ha",
   "cum_vi ~ map",
   "cum_vi ~ diurnal_temp_range",
+  "cum_vi ~ diam_quad_mean",
 
   "s1_length ~ eff_rich",
   "s1_length ~ n_stems_ge10_ha",
   "s1_length ~ map",
   "s1_length ~ diurnal_temp_range",
+  "s1_length ~ diam_quad_mean",
 
   "s1_green_rate ~ eff_rich",
   "s1_green_rate ~ n_stems_ge10_ha",
   "s1_green_rate ~ map",
   "s1_green_rate ~ diurnal_temp_range",
+  "s1_green_rate ~ diam_quad_mean",
 
   "s1_senes_rate ~ eff_rich",
   "s1_senes_rate ~ n_stems_ge10_ha",
   "s1_senes_rate ~ map",
   "s1_senes_rate ~ diurnal_temp_range",
+  "s1_senes_rate ~ diam_quad_mean",
 
   "start_lag ~ eff_rich",
   "start_lag ~ n_stems_ge10_ha",
   "start_lag ~ map",
   "start_lag ~ diurnal_temp_range", 
+  "start_lag ~ diam_quad_mean",
 
   "end_lag ~ eff_rich",
   "end_lag ~ n_stems_ge10_ha",
   "end_lag ~ map",
-  "end_lag ~ diurnal_temp_range"
+  "end_lag ~ diurnal_temp_range",
+  "end_lag ~ diam_quad_mean"
 )
 
 bivar_df <- as.data.frame(do.call(rbind, lapply(bivar_list, function(x) {
@@ -161,6 +169,11 @@ bivar_df <- as.data.frame(do.call(rbind, lapply(bivar_list, function(x) {
 
 bivar_df$x <- factor(bivar_df$x, levels = names(pred_lookup))
 bivar_df$y <- factor(bivar_df$y, levels = names(resp_lookup))
+
+#bivar_df %>% 
+#  filter(x == "diam_cov", y == "cum_vi") %>%
+#  ggplot(., aes(x = pred, y = resp)) + 
+#  geom_point()
 
 pdf(file = "img/bivar.pdf", width = 15, height = 10)
 ggplot() + 
@@ -288,7 +301,7 @@ dat_std <- dat_clean %>%
 stopifnot(nrow(dat_std) == nrow(dat_clean))
 
 # Check for collinearity
-pdf(file = "img/corrplot.pdf", height = 8, width = 8)
+pdf(file = "img/corrplot.pdf", height = 8, width = 10)
 corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "cluster")]]) + 
   scale_x_discrete(labels = pred_lookup) + 
   scale_y_discrete(labels = pred_lookup)
@@ -339,7 +352,7 @@ dev.off()
 
 # How many sites are there?
 write(
-  commandOutput(nrow(dat_clean), "nSites"),
+  commandOutput(nrow(dat_nogeom), "nSites"),
   file = "out/analysis_vars.tex")
 
 # Save data ready for models

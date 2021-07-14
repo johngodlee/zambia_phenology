@@ -154,6 +154,16 @@ nuniquespindet <- length(unique(tree_fil$species_name_clean[grepl("indet", tree_
 ngenindet <- sum(grepl("Indet indet", tree_fil$species_name_clean))
 pergenindet <- ngenindet / ntrees * 100
 
+# Find quadratic mean of tree diameter per site, and diam CoV
+diam_summ <- tree_fil %>%
+  group_by(plot_cluster) %>%
+  summarise(
+    diam_quad_mean = quadMean(diam, na.rm = TRUE),
+    diam_mean = mean(diam, na.rm = TRUE),
+    diam_sd = sd(diam, na.rm = TRUE)) %>%
+  mutate(diam_cov = diam_sd / diam_mean * 100) %>% 
+  dplyr::select(plot_cluster, diam_quad_mean, diam_cov)
+
 # Create tree species abundance matrix by plot cluster
 ba_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
   species_id = "species_name_clean", abundance = "ba") %>%
@@ -161,7 +171,8 @@ ba_clust_mat <- abMat(tree_fil, site_id = "plot_cluster",
 
 # Filter plots data to match sites in filtered tree data
 plots_clean <- plots_fil_sf %>% 
-  filter(plot_cluster %in% tree_fil$plot_cluster)
+  filter(plot_cluster %in% tree_fil$plot_cluster) %>%
+  left_join(., diam_summ, by = "plot_cluster")
 
 # Are all plots in both objects?
 stopifnot(nrow(ba_clust_mat) == nrow(plots_clean))

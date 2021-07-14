@@ -1,10 +1,10 @@
 # Define variable name lookup
 pred_lookup <- c("Richness", "Evenness", "Stem density",  
   "MAP", "Wet season precip.", "Pre-green-up precip.", "Pre-senescence precip.",
-    "Vegetation type", "Diurnal dT")
+    "Vegetation type", "Diurnal dT", "Stem diameter", "Stem diameter variance")
 names(pred_lookup) <- c("eff_rich", "evenness", "n_stems_ge10_ha",
   "map", "cum_precip_seas", "cum_precip_pre", "cum_precip_end",
-  "cluster", "diurnal_temp_range")
+  "cluster", "diurnal_temp_range", "diam_quad_mean", "diam_cov")
 
 resp_lookup <- c("Cumulative EVI", "Season length", 
   "Green-up rate", "Senescence rate",
@@ -277,4 +277,15 @@ abMat <- function(x, site_id, species_id, fpc = NULL, abundance = NULL) {
   comm <- as.data.frame(comm)
 
   return(comm)
+}
+
+
+#' Calculate the quadratic mean
+#'
+#' @param x vector 
+#'
+#' @return quadratic mean of vector
+#' 
+quadMean <- function(x, ...) {
+  sqrt(mean(x^2, ...))
 }

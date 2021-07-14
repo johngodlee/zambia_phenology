@@ -4,8 +4,10 @@
 
 # Packages
 library(dplyr)
+library(tidyr)
 library(data.table)
 library(BIOMASS)
+library(fst)
 
 # Import data
 plots <- readRDS("dat/plots.rds")
@@ -14,8 +16,10 @@ try_traits <- read.table("dat/try/tde202125164358.txt",
   skip = 3, header = TRUE, sep = "\t")
 try_sp <- read.table("dat/try/TryAccSpecies.txt",
   header = TRUE, sep = "\t")
-try_dat <- fread("/Volumes/seosaw_spat/try/14425.txt", 
-  header = TRUE, sep = "\t", dec = ".", quote = "", data.table = FALSE)
+# try_dat <- fread("/Volumes/seosaw_spat/try/14425.txt", 
+#   header = TRUE, sep = "\t", dec = ".", quote = "", data.table = FALSE)
+# write.fst("/Volumes/seosaw_spat/try/14425.fst")
+try_dat <- read.fst("/Volumes/seosaw_spat/try/14425.fst")
 
 # Extract genera from abundance matrix
 genus <- unique(unlist(lapply(strsplit(names(ba_mat), " "), "[", 1)))
@@ -23,10 +27,14 @@ genus <- unique(unlist(lapply(strsplit(names(ba_mat), " "), "[", 1)))
 # Create genus column in TRY species list
 try_sp$genus <- unlist(lapply(strsplit(try_sp$AccSpeciesName, " "), "[", 1))
 
-# Match genus names
+# Find all species from genera in the plot data
 genus_out <- try_sp[try_sp$genus %in% genus,
   c("AccSpeciesName", "AccSpeciesID")]
 names(genus_out) <- c("species", "id")
+
+# Remove genus only names
+all_sp_out <- genus_out[
+  unlist(lapply(strsplit(genus_out$species, " "), length)) > 1,]
 
 # Find traits
 trait_out <- try_traits %>%
@@ -36,11 +44,10 @@ trait_out <- try_traits %>%
   as.character()
 
 # Write files
-write.csv(genus_out, "dat/try/species_list.csv", row.names = FALSE)
+write.csv(all_sp_out, "dat/try/species_list.csv", row.names = FALSE)
 writeLines(trait_out, "dat/try/trait_list.txt")
 
-# Remove genera from species list
-sp_clean <- genus_out[unlist(lapply(strsplit(genus_out$species, " "), length)) > 1,]
+# Remove genera only from species list
 
 # Subset TRY data to species and columns of interest
 try_clean <- try_dat %>%
@@ -58,7 +65,7 @@ try_clean <- try_dat %>%
     val_std = StdValue,
     unit_std = UnitName,
     error_risk = ErrorRisk) %>%
-  filter(species_id %in% sp_clean$id)
+  filter(species_id %in% all_sp_out$id)
 
 # Trait ID match
 trait_id_lookup <- try_clean %>%
@@ -97,6 +104,8 @@ trait_id_lookup <- try_clean %>%
       TRUE ~ as.character(trait_id))
   )
 
+write.csv("dat/trait_id_lookup.csv", row.names = FALSE)
+
 # Split try data by observation
 try_split <- split(try_clean, try_clean$obs_id)
 
@@ -114,30 +123,25 @@ try_species <- as.data.frame(do.call(rbind, lapply(try_split, function(x) {
     return(NULL)
   }
 })))
+names(try_species) <- c("binom", "trait_id", "val_std")
 
 # Get wood density
 wd_sp <- wdData %>%
-  mutate(species = paste(genus, species)) %>%
+  mutate(binom = paste(genus, species)) %>%
   filter(
-    species %in% sp_clean$species,
+    genus %in% genus,
     grepl("africa", region, ignore.case = TRUE)) %>%
-  group_by(species) %>%
+  group_by(binom) %>%
   summarise(val_std = mean(wd, na.rm = TRUE)) %>%
   mutate(trait_id = "wd")
 
-# Bind all traits
-traits <- bind_rows(wd_sp, try_species) %>%
+# Bind all traits for all species in the same genera as in plot data
+traits_sp <- bind_rows(wd_sp, try_species) %>%
   filter(!is.na(val_std)) %>%
-  group_by(species, trait_id) %>%
+  group_by(binom, trait_id) %>%
   summarise(val_std = mean(val_std, na.rm = TRUE)) %>%
   spread(trait_id, val_std)
 
-# Create tidy dataframe from ba_mat
-ba_df <- ba_mat %>%
-  rownames_to_column("plot_cluster") %>%
-  gather(species, ba, -plot_cluster) %>%
-  filter(ba > 0) %>%
-  left_join(., traits, by = "species")
 
 # Write to file
-saveRDS(ba_df, "dat/traits_sp.rds")
+saveRDS(traits_sp, "dat/traits_sp.rds")
