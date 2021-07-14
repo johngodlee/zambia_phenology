@@ -6,52 +6,62 @@
 
 # Packages
 library(sf)
-library(data.table)
 library(dplyr)
 library(tibble)
 library(tidyr)
+library(ggplot2)
 
 # Import data
-try_dat <- readRDS("dat/traits_sp.rds")
+traits_sp <- readRDS("dat/traits_sp.rds")
 
 plots <- readRDS("dat/plots_trmm.rds")
 
-# Calculate community weighted means of traits
-plots_cwm_species <- try_dat %>%
-  group_by(plot_cluster) %>%
-  summarise(
-    across(
-      all_of(trait_id_lookup$trait_col[trait_id_lookup$trait_col %in% names(.)]),
-      ~weighted.mean(.x, ba, na.rm = TRUE),  .names = "{.col}_cwm")) %>%
-  as.data.frame(.) %>%
-  inner_join(., plots, by = "plot_cluster")
+trait_id_lookup <- read.csv("dat/trait_id_lookup.csv")
 
-# Calculate genus-level CWMs of traits
-traits$genus <- unlist(lapply(strsplit(traits$species, " "), "[", 1))
+ba_clust_mat <- readRDS("dat/ba_clust_mat.rds")
 
-traits_genus <- traits %>%
-  dplyr::select(-species) %>%
+# Create genus level means of traits
+traits_gen <- traits_sp %>%
+  ungroup() %>%
+  mutate(genus = gsub(" .*", "", binom)) %>%
+  dplyr::select(-binom) %>%
   group_by(genus) %>%
   summarise(across(everything(), ~mean(.x, na.rm = TRUE)))
 
-try_dat$genus <- unlist(lapply(strsplit(try_dat$species, " "), "[", 1))
+# Join traits to basal area 
+ba_traits <- ba_clust_mat %>% 
+  rownames_to_column("plot_cluster") %>%
+  gather(binom, ba, -plot_cluster) %>%
+  filter(ba > 0) %>%
+  mutate(genus = gsub(" .*", "", binom)) %>%
+  left_join(., traits_gen, by = "genus")
 
-try_dat_genus <- try_dat %>%
-  dplyr::select(-species) %>%
-  group_by(plot_cluster, genus) %>%
-  summarise(
-    across(
-      all_of(trait_id_lookup$trait_col[trait_id_lookup$trait_col %in% names(.)]),
-        ~mean(.x, na.rm = TRUE)),
-    ba = sum(ba, na.rm = TRUE))
+# What proportion of basal area per site is represented by trait measurements
+pdf(file = "img/traits_ecdf.pdf", width = 10, height = 8)
+ba_traits %>% 
+  group_by(plot_cluster) %>% 
+  summarise(across(
+      all_of(c("wd", trait_id_lookup$trait_col[trait_id_lookup$trait_col %in% names(.)])),
+      ~sum(ba[!is.nan(.x)]) / sum(ba, na.rm = TRUE))) %>%
+  gather(trait, prop, -plot_cluster) %>%
+  ggplot(.) + 
+  geom_line(aes(x = prop, y = 1 - ..y..), 
+    stat = "ecdf", pad = FALSE, size = 1) + 
+  geom_vline(xintercept = 0.75, linetype = 2, colour = "red") + 
+  geom_hline(yintercept = 0.75, linetype = 2, colour = "red") + 
+  facet_wrap(~trait) + 
+  theme_bw() + 
+  labs(x = "Proportion of basal area", y = "Proportion of sites")
+dev.off()
 
-plots_cwm_genus <- try_dat_genus %>%
+# Calculate genus-level CWMs of traits
+plots_cwm_genus <- ba_traits %>%
   group_by(plot_cluster) %>%
   summarise(
     across(
-      all_of(trait_id_lookup$trait_col[trait_id_lookup$trait_col %in% names(.)]),
+      all_of(c("leaf_n_mass", "leaf_p_mass", "sla", "wd")),
       ~weighted.mean(.x, ba, na.rm = TRUE),  .names = "{.col}_genus_cwm")) %>%
-  inner_join(., plots_cwm_species, by = "plot_cluster")
+  right_join(., plots, by = "plot_cluster")
 
 # Write to file 
 saveRDS(plots_cwm_genus, "dat/plots_try.rds") 
