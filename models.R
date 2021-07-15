@@ -6,185 +6,61 @@
 
 # Packages
 library(dplyr)
-library(nlme)
-library(MuMIn)
-library(sjPlot)
-library(ggeffects)
-library(emmeans)
 library(ggplot2)
 library(ggnewscale)
+library(ggeffects)
 library(shades)
 library(xtable)
+library(lme4)
+library(MuMIn)
+library(sjPlot)
 library(car)
-library(tibble)
-library(tidyr)
+library(emmeans)
 
 source("functions.R")
 
 # Import data
 dat_std <- readRDS("dat/plots_anal.rds")
 
-# Mixed models of diversity with cluster random effects ----
+# Mixed models of diversity with clusters 
 
 # Fit maximal models and rank model subsets by AIC
-max_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range +
-  evenness + eff_rich + eff_rich:cluster, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-dredge_c <- dredge(max_ml_c, evaluate = TRUE, rank = "AIC")
+max_mod_flist <- paste0(names(resp_lookup), " ~ cum_precip_seas + diurnal_temp_range + evenness + eff_rich + (1|cluster)")
 
-max_ml_l <- gls(s1_length ~ cum_precip_seas + diurnal_temp_range + 
-  evenness + eff_rich + eff_rich:cluster,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-dredge_l <- dredge(max_ml_l, evaluate = TRUE, rank = "AIC")
+max_ml_list <- lapply(max_mod_flist, function(x) {
+  lmer(x, data = dat_std, REML = FALSE, na.action = na.fail)
+  })
 
-max_ml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range +
-  evenness + eff_rich + eff_rich:cluster,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-dredge_r <- dredge(max_ml_r, evaluate = TRUE, rank = "AIC")
+dredge_list <- lapply(max_ml_list, function(x) {
+  dredge(x, evaluate = TRUE, rank = "AIC")
+  })
 
-max_ml_d <- gls(s1_senes_rate ~ cum_precip_end + diurnal_temp_range + 
-  evenness + eff_rich + eff_rich:cluster,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-dredge_d <- dredge(max_ml_d, evaluate = TRUE, rank = "AIC")
+# Fit climate only "null" models
+null_mod_flist <- paste0(names(resp_lookup), " ~ cum_precip_seas + diurnal_temp_range + (1|cluster)")
 
-max_ml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  evenness + eff_rich + eff_rich:cluster,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-dredge_s <- dredge(max_ml_s, evaluate = TRUE, rank = "AIC")
+null_ml_list <- lapply(null_mod_flist, function(x) {
+  lmer(x, data = dat_std, REML = FALSE)
+  })
 
-max_ml_e <- gls(end_lag ~ cum_precip_end + diurnal_temp_range + 
-  evenness + eff_rich + eff_rich:cluster,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-dredge_e <- dredge(max_ml_e, evaluate = TRUE, rank = "AIC")
-
-max_ml_list <- list(max_ml_c, max_ml_l, max_ml_r, 
-  max_ml_d, max_ml_s, max_ml_e)
-
-dredge_list <- list(dredge_c, dredge_l, dredge_r, 
-  dredge_d, dredge_s, dredge_e)
-
-# Fit climate only ("null") models
-null_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-null_ml_l <- gls(s1_length ~ cum_precip_seas + diurnal_temp_range,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-null_ml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-null_ml_d <- gls(s1_senes_rate ~ cum_precip_end + diurnal_temp_range,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-null_ml_s <- gls(start_lag ~ cum_precip_end + diurnal_temp_range,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-null_ml_e <- gls(end_lag ~ cum_precip_end + diurnal_temp_range,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-null_ml_list <- list(null_ml_c, null_ml_l, null_ml_r, 
-  null_ml_d, null_ml_s, null_ml_e)
-
-# Fit REML version of "best" interaction models
+# Fit REML version of "best" models
 ##' For marginal effect slopes
 # Which models are "best" while including interaction of cluster and richness?
 
-dredge_list[[1]]
-best_int_reml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
-  evenness + eff_rich + eff_rich:cluster, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "REML")
+best_mod_flist <- c(
+  "cum_vi ~ cum_precip_seas + evenness + eff_rich + (1|cluster)",
+  "s1_length ~ cum_precip_seas + diurnal_temp_range + evenness + eff_rich + (1|cluster)",
+  "s1_green_rate ~ cum_precip_pre + diurnal_temp_range + (1|cluster)",
+  "s1_senes_rate ~ cum_precip_end + evenness + eff_rich + (1|cluster)",
+  "start_lag ~ cum_precip_pre + diurnal_temp_range + evenness + eff_rich + (1|cluster)",
+  "end_lag ~ cum_precip_seas + diurnal_temp_range + (1|cluster)")
 
-dredge_list[[2]]
-best_int_reml_l <- gls(s1_length ~ cum_precip_seas + 
-  evenness + eff_rich + eff_rich:cluster, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "REML")
-
-dredge_list[[3]]
-best_int_reml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range + 
-  evenness + eff_rich + eff_rich:cluster, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "REML")
-
-dredge_list[[4]]
-best_int_reml_d <- gls(s1_senes_rate ~ cum_precip_end + 
-  evenness + eff_rich + eff_rich:cluster, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "REML")
-
-dredge_list[[5]]
-best_int_reml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  evenness + eff_rich + eff_rich:cluster, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "REML")
-
-dredge_list[[6]]
-best_int_reml_e <- gls(end_lag ~ eff_rich + diurnal_temp_range + 
-  eff_rich:cluster, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "REML")
-
-best_int_reml_list <- list(best_int_reml_c, best_int_reml_l, best_int_reml_r, 
-  best_int_reml_d, best_int_reml_s, best_int_reml_e)
-
-# Fit ML version of "best" all round models without interaction
-##' For model comparison
-best_ml_c <- gls(cum_vi ~ cum_precip_seas + diurnal_temp_range + 
-  evenness + eff_rich,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-best_ml_l <- gls(s1_length ~ cum_precip_seas + 
-  evenness + eff_rich,
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-best_ml_r <- gls(s1_green_rate ~ cum_precip_pre + diurnal_temp_range + 
-  evenness + eff_rich, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-best_ml_d <- gls(s1_senes_rate ~ cum_precip_end + 
-  evenness + eff_rich, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-best_ml_s <- gls(start_lag ~ cum_precip_pre + diurnal_temp_range + 
-  evenness + eff_rich, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-best_ml_e <- gls(end_lag ~ eff_rich + diurnal_temp_range, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-best_ml_list <- list(best_ml_c, best_ml_l, best_ml_r, 
-  best_ml_d, best_ml_s, best_ml_e)
+best_ml_list <- lapply(best_mod_flist, function(x) {
+  lmer(formula(x), data = dat_std, REML = FALSE)
+  })
 
 # Fit REML version of "best" models
 ##' For model slope interval plots
-best_reml_c <- update(best_ml_c, method = "REML")
-best_reml_l <- update(best_ml_l, method = "REML")
-best_reml_r <- update(best_ml_r, method = "REML")
-best_reml_d <- update(best_ml_d, method = "REML")
-best_reml_s <- update(best_ml_s, method = "REML")
-best_reml_e <- update(best_ml_e, method = "REML")
-
-best_reml_list <- list(best_reml_c, best_reml_l, best_reml_r, 
-  best_reml_d, best_reml_s, best_reml_e)
+best_reml_list <- lapply(best_ml_list, update, REML = TRUE)
 
 # Get model fit statistics 
 modFit <- function(best_ml, null_ml) {
@@ -199,22 +75,20 @@ modFit <- function(best_ml, null_ml) {
 }
 
 fit_list <- lapply(seq(length(best_ml_list)), function(x) {
-  modFit(best_ml_list[[x]], null_ml_list[[x]])
+  modFit(max_ml_list[[x]], null_ml_list[[x]])
   })
 
 # Nest all model lists in one list
 all_mod_list <- list(max_ml_list, dredge_list, null_ml_list, 
-  best_ml_list, best_reml_list, best_int_reml_list, fit_list)
-
+  best_ml_list, best_reml_list, fit_list)
 names(all_mod_list) <- c("max_ml", "dredge", "null_ml",
-  "best_ml", "best_reml", "best_int_reml", "fit_list")
+  "best_ml", "best_reml", "fit_list")
 
 # Write model lists
 saveRDS(all_mod_list, "dat/all_mod_list.rds")
-all_mod_list <- readRDS("dat/all_mod_list.rds")
 
 # Export model statistics table
-mod_stat_df <- as.data.frame(do.call(rbind, lapply(all_mod_list[[7]], function(x) {
+mod_stat_df <- as.data.frame(do.call(rbind, lapply(all_mod_list[[6]], function(x) {
       # If positive, max mod better
       daic <- x[2,2] - x[1,2]
       dbic <- x[2,3] - x[1,3]
@@ -226,7 +100,7 @@ mod_stat_df <- as.data.frame(do.call(rbind, lapply(all_mod_list[[7]], function(x
 
 names(mod_stat_df) <- c("daic", "dbic", "rsq", "dlogl")
 mod_stat_df$resp <- unlist(lapply(all_mod_list[[4]], function(x) {
-    gsub("\\s~.*", "", x$call[[2]])[2]
+    gsub("\\s~.*", "", x@call[[2]])[2]
   }))
 mod_stat_df <- mod_stat_df[,c(length(mod_stat_df), seq(length(mod_stat_df) - 1))]
 mod_stat_df$resp <- factor(mod_stat_df$resp, levels = names(resp_lookup), 
@@ -248,12 +122,11 @@ close(fileConn)
 
 # Model selection tables
 # Highlight best model according to AIC
-best_mod <-     c(1,2,2,1,1,1)  # best_ml_list
-best_int_mod <- c(3,4,6,1,3,5)  # best_int_reml_list
+best_mod <- c(1,2,1,2,1,1)  # best_ml_list
 
 lapply(seq(length(all_mod_list[[2]])), function(x) {
-  out <- as.data.frame(all_mod_list[[2]][[x]])[1:10, c(2:6, 8:11)] %>%
-    mutate(across(1:5, ~ if_else(is.na(.x), "", "\\checkmark")),
+  out <- as.data.frame(all_mod_list[[2]][[x]])[1:10, c(2:10)] %>%
+    mutate(across(1:4, ~ if_else(is.na(.x), "", "\\checkmark")),
       rank = seq(nrow(.)), .before = 1)
 
   names(out)[2] <- "precip"
@@ -270,12 +143,11 @@ lapply(seq(length(all_mod_list[[2]])), function(x) {
   tab_name <- paste0("mod_sel_", resp)
 
   out[best_mod[x],] <- paste0("\\textbf{", out[best_mod[x],], "}")
-  out[best_int_mod[x],] <- paste0("\\underline{", out[best_int_mod[x],], "}")
 
   out_tab <- xtable(out,
     label = tab_name,
     caption = paste(resp_lookup[names(resp_lookup) %in% resp], 
-      "Model selection candidate models, with fit statistics. The overall best model is marked by bold text, while the best model with a richness:cluster interaction term is marked by underlined text"),
+      "Model selection candidate models, with fit statistics. The overall best model is marked by bold text, according to AIC and model parsimony"),
     align = "cccccccrrrr",
     display = c("s", "d", "s", "s", "s", "s", "s", "d", "d", "f", "f"),
     digits = c(0,0,0,0,0,0,0,0,0,2,3))
@@ -304,7 +176,7 @@ mod_slope_df <- do.call(rbind, lapply(all_mod_list[[5]], function(x) {
 
   mod_pred_fil <- mod_pred %>%
     filter(!grepl("eff_rich:cluster", term)) %>%
-    mutate(resp = gsub("\\s~.*", "", x$call[[2]])[2]) %>%
+    mutate(resp = gsub("\\s~.*", "", x@call[[2]])[2]) %>%
     dplyr::select(1:8, group, resp)
 
   return(mod_pred_fil)
@@ -314,9 +186,7 @@ mod_slope_df <- do.call(rbind, lapply(all_mod_list[[5]], function(x) {
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
       labels = resp_lookup[c(1,3,5,2,4,6)]),
     psig = case_when(
-      p.value <= 0.05 ~ "*",
-      p.value <= 0.01 ~ "**",
-      p.value <= 0.001 ~ "***",
+      conf.low >= 0 & conf.high >= 0 | conf.low <= 0 & conf.high <= 0 ~ "*",
       TRUE ~ NA_character_))
 
 pdf(file = "img/mod_slopes.pdf", width = 10, height = 5)
@@ -340,35 +210,48 @@ ggplot() +
 dev.off()
 
 # Export interaction effect on richness plots
-rand_marg_df <- do.call(rbind, lapply(all_mod_list[[6]], function(x) {
-  preds <- as.data.frame(ggemmeans(model = x,
-      terms = c("eff_rich", "cluster")))
-  preds$resp <- gsub("\\s~.*", "", x$call[[2]])[2]  
+best_int_mod_flist <- c(
+  "cum_vi ~ cum_precip_seas + evenness + eff_rich + eff_rich:cluster + (1|cluster)",
+  "s1_length ~ cum_precip_seas + diurnal_temp_range + evenness + eff_rich + eff_rich:cluster + (1|cluster)",
+  "s1_green_rate ~ cum_precip_pre + diurnal_temp_range + eff_rich + eff_rich:cluster + (1|cluster)",
+  "s1_senes_rate ~ cum_precip_end + evenness + eff_rich + eff_rich:cluster + (1|cluster)",
+  "start_lag ~ cum_precip_pre + diurnal_temp_range + evenness + eff_rich + eff_rich:cluster + (1|cluster)",
+  "end_lag ~ cum_precip_seas + diurnal_temp_range + eff_rich + eff_rich:cluster + (1|cluster)")
+
+best_int_ml_list <- lapply(best_int_mod_flist, function(x) {
+  lmer(formula(x), data = dat_std, REML = FALSE)
+  })
+
+rand_marg_df <- do.call(rbind, lapply(best_int_ml_list, function(x) {
+  preds <- ggemmeans(x, terms = c("eff_rich", "cluster"), 
+    type = "re", interval = "confidence", ci.lvl = 0.5)
+  preds$resp <- gsub("\\s~.*", "", x@call[[2]])[2]  
   names(preds) <- c("eff_rich", "pred", "se", "conf_lo", "conf_hi", "cluster", "resp")
   return(preds)
 }))
+
 rand_marg_df$resp_clean <- factor(rand_marg_df$resp, 
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
       labels = resp_lookup[c(1,3,5,2,4,6)])
 
-marg_signif <- do.call(rbind, lapply(all_mod_list[[6]], function(x) {
+marg_signif <- do.call(rbind, lapply(best_int_ml_list, function(x) {
   summ <- Anova(x)
   psig <- case_when(
       summ[,3] <= 0.05 ~ "*",
       summ[,3] <= 0.01 ~ "**",
       summ[,3] <= 0.001 ~ "***",
       TRUE ~ NA_character_)
-  out <- data.frame(resp = gsub("\\s~.*", "", x$call[2]),
+  out <- data.frame(resp = gsub("\\s~.*", "", x@call[2]),
     variable = row.names(summ), psig) 
   out <- out[out$variable == "eff_rich:cluster",]
   out$x <- 0
-  out$resp
   midpoint <- mean(rand_marg_df[rand_marg_df$resp == out$resp & 
     rand_marg_df$eff_rich == 0,"pred"])
   out$y <- midpoint + 
-    (max(rand_marg_df[rand_marg_df$resp == out$resp,"conf_hi"]) - midpoint) * 0.25
+    (max(rand_marg_df[rand_marg_df$resp == out$resp, "conf_hi"], na.rm = TRUE) - midpoint) * 0.25
   return(out)
   }))
+
 marg_signif$resp_clean <- factor(marg_signif$resp, 
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
       labels = resp_lookup[c(1,3,5,2,4,6)])
@@ -383,9 +266,6 @@ ggplot() +
   geom_line(data = rand_marg_df, 
     aes(x = eff_rich, y = pred, colour = cluster),
     size = 1.5) + 
-  geom_text(data = marg_signif, 
-    aes(x = x, y = y, label = psig),
-    size = 8) + 
   scale_colour_manual(name = "Cluster", 
     values = brightness(clust_pal, 0.75)) +
   facet_wrap(~resp_clean, scales = "free_y") + 
@@ -394,7 +274,7 @@ ggplot() +
 dev.off()
 
 # Post-hoc tests for significance of interaction slope differences
-lsq_list <- lapply(all_mod_list[[6]], function(x) {
+lsq_list <- lapply(best_int_ml_list, function(x) {
   emmeans(x, 
   pairwise ~ cluster*eff_rich, 
   adjust = "tukey")
@@ -436,39 +316,19 @@ writeLines(print(lsq_terms_tab, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-# Models of structure
-diam_ml_c <- gls(cum_vi ~ diam_quad_mean, 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
+# Models for demographic structure
 
-diam_ml_l <- gls(s1_length ~ diam_quad_mean , 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
+diam_mod_flist <- paste0(names(resp_lookup), " ~ diam_quad_mean + (1|cluster)")
 
-diam_ml_r <- gls(s1_green_rate ~ diam_quad_mean , 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-diam_ml_d <- gls(s1_senes_rate ~ diam_quad_mean , 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-diam_ml_s <- gls(start_lag ~ diam_quad_mean , 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-diam_ml_e <- gls(end_lag ~ diam_quad_mean , 
-  correlation = corGaus(1, form = ~x+y),
-  data = dat_std, method = "ML")
-
-diam_ml_list <- list(diam_ml_c, diam_ml_l, diam_ml_r, 
-  diam_ml_d, diam_ml_s, diam_ml_e)
-
-mod_slope_df <- do.call(rbind, lapply(diam_ml_list, function(x) {
+diam_ml_list <- lapply(diam_mod_flist, function(x) {
+  lmer(x, data = dat_std, REML = FALSE)
+  })
+ 
+diam_mod_slope_df <- do.call(rbind, lapply(diam_ml_list, function(x) {
   mod_pred <- get_model_data(x, type = "std")
 
   mod_pred_fil <- mod_pred %>%
-    mutate(resp = gsub("\\s~.*", "", x$call[[2]])[2]) %>%
+    mutate(resp = gsub("\\s~.*", "", x@call[[2]])[2]) %>%
     dplyr::select(1:8, group, resp)
 
   return(mod_pred_fil)
@@ -478,21 +338,19 @@ mod_slope_df <- do.call(rbind, lapply(diam_ml_list, function(x) {
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
       labels = resp_lookup[c(1,3,5,2,4,6)]),
     psig = case_when(
-      p.value <= 0.05 ~ "*",
-      p.value <= 0.01 ~ "**",
-      p.value <= 0.001 ~ "***",
+      conf.low >= 0 & conf.high >= 0 | conf.low <= 0 & conf.high <= 0 ~ "*",
       TRUE ~ NA_character_))
 
 pdf(file = "img/diam_quad_mod_slopes.pdf", width = 6, height = 5)
 ggplot() +
 geom_vline(xintercept = 0, linetype = 2) +
-geom_errorbarh(data = mod_slope_df, 
+geom_errorbarh(data = diam_mod_slope_df, 
   aes(xmin = conf.low, xmax = conf.high, y = resp, colour = group),
   height = 0) + 
-geom_point(data = mod_slope_df,
+geom_point(data = diam_mod_slope_df,
   aes(x = estimate, y = resp, fill = group),
   shape = 21, colour = "black") + 
-geom_text(data = mod_slope_df,
+geom_text(data = diam_mod_slope_df,
   aes(x = estimate, y = resp, colour = group, label = psig),
   size = 8, nudge_y = 0.1) + 
 scale_fill_manual(name = "", values = pal[3:4]) +
