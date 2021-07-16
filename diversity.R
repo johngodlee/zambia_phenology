@@ -22,6 +22,8 @@ dat <- st_as_sf(dat)
 
 plot_id_lookup <- readRDS("dat/plot_id_lookup.rds")
 
+ab_plot_mat <- readRDS("dat/ab_plot_mat.rds")
+
 ba_clust_mat <- readRDS("dat/ba_clust_mat.rds")
 
 # Filter basal area matrix to plots in `dat`
@@ -150,6 +152,8 @@ sil_mean <- unlist(lapply(sil_out, function(x) {
     NA_real_
   }
 }))
+
+sil_mean_best <- max(sil_mean, na.rm = TRUE) * 10
 
 # Identify optimal number of clusters
 clust_optim <- nclust[sil_mean == max(sil_mean, na.rm = TRUE) & !is.na(sil_mean)]
@@ -316,14 +320,14 @@ clust_summ <- dat_div %>%
 
 clust_summ[ c(rbind(seq(1, nrow(clust_summ), 3), seq(3, nrow(clust_summ), 3))), 1:5] <- ""
 
-names(clust_summ) <- c("Cluster", "N sites", "Richness", "MAP", "Diurnal $\\delta$T", "Species", "Indicator value")
+names(clust_summ) <- c("Cluster", "N sites", "Richness", "MAP", "$\\delta$T", "Species", "Indicator value")
 
 # Export indval table
 clust_summ_xtable <- xtable(clust_summ,
   label = "clust_summ",
   align = rep("c", 8),
   display = rep("s", 8),
-  caption = "Climatic information and Dufrene-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm, based on basal area weighted species abundances. The three species per cluster with the highest indicator values are shown along with other key statistics for each cluster. MAP (Mean Annual Precipitation) and Diurnal $\\delta$T are reported as the mean and 1 standard deviation in parentheses. Species richness is reported as the median and the interquartile range in parentheses.")
+  caption = "Climatic information and Dufrene-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm, based on basal area weighted species abundances. The three species per cluster with the highest indicator values are shown along with other key statistics for each cluster. MAP (Mean Annual Precipitation) and $\\delta$T (Diurnal temperature range) are reported as the mean and 1 standard deviation in parentheses. Species richness is reported as the median and the interquartile range in parentheses.")
 
 fileConn <- file("out/clust_summ.tex")
 writeLines(print(clust_summ_xtable, include.rownames = FALSE,
@@ -332,6 +336,58 @@ writeLines(print(clust_summ_xtable, include.rownames = FALSE,
     sanitize.text.function = function(x) {x}),
   fileConn)
 close(fileConn)
+
+# Calculate mean pairwise Bray distances within each cluster
+# Filter to plots we're using 
+tree_ab_mat_plot_fil <- ab_plot_mat %>%
+  rownames_to_column("plot_id") %>%
+  left_join(., plot_id_lookup, by = "plot_id") %>%
+  filter(plot_cluster %in% dat_div$plot_cluster) %>%
+  dplyr::select(-plot_id) 
+
+# Mean pairwise Bray distance across all plots
+tree_ab_mat_plot_fil_fil <- tree_ab_mat_plot_fil %>%
+  dplyr::select(-plot_cluster) %>%
+  filter(rowSums(.) != 0)
+plot_dist_all_mean <- mean(vegdist(tree_ab_mat_plot_fil_fil))
+
+# Split by plot cluster
+tree_ab_mat_plot_fil_split <- split(tree_ab_mat_plot_fil, tree_ab_mat_plot_fil$plot_cluster)
+
+# Bray distance among plots in each cluster
+plot_dist_mean <- unlist(lapply(tree_ab_mat_plot_fil_split, function(x) {
+  x %>% 
+    dplyr::select(-plot_cluster) %>%
+    dplyr::select(where(~ any(. != 0))) %>%
+    vegdist() %>%
+    mean()
+  }))
+
+pdf(file = "img/plot_dist_hist.pdf", width = 8, height = 6)
+ggplot() + 
+  geom_histogram(data = data.frame(plot_dist_mean), aes(x = plot_dist_mean), 
+    fill = pal[6], colour = "black", binwidth = 0.05 ) +
+  geom_vline(xintercept = plot_dist_all_mean, colour = "red") + 
+  theme_panel() + 
+  labs(x = "Mean pairwise Bray distance within cluster", y = "Frequency")
+dev.off()
+
+# Percentage of clusters with mean pairwise distance lower than the mean across all pairs
+plot_dist_mean_clean <- plot_dist_mean[!is.na(plot_dist_mean)]
+plot_dist_per <- round(length(which(plot_dist_mean_clean < plot_dist_all_mean)) / 
+  length(plot_dist_mean_clean) * 100, 1)
+
+# How many sites
+n_sites <- nrow(dat_div)
+
+write(
+  c(
+    commandOutput(plot_dist_per, "plotDistPer"),
+    commandOutput(n_sites, "nSites"),
+    commandOutput(clust_optim, "nCluster"),
+    commandOutput(round(sil_mean_best, 2), "silBest")
+    ),
+  file = "out/diversity_vars.tex")
 
 # Write file
 saveRDS(dat_div, "dat/plots_div.rds") 

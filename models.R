@@ -110,7 +110,7 @@ mod_stat_tab <- xtable(mod_stat_df,
   align = "rrcccc",
   display = c("s", "s", "f", "f", "f", "f"),
   digits = c(0, 0, 1, 1, 2, 2),
-  caption = "Model fit statistics for each phenological metric.")
+  caption = "Model fit statistics for the best model describing each phenological metric.")
 names(mod_stat_tab) <- c("Response", "$\\delta$AIC", "$\\delta$BIC", "R\\textsuperscript{2}\\textsubscript{adj}", "$\\delta$logLik")
 
 fileConn <- file("out/mod_stat.tex")
@@ -234,28 +234,6 @@ rand_marg_df$resp_clean <- factor(rand_marg_df$resp,
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
       labels = resp_lookup[c(1,3,5,2,4,6)])
 
-marg_signif <- do.call(rbind, lapply(best_int_ml_list, function(x) {
-  summ <- Anova(x)
-  psig <- case_when(
-      summ[,3] <= 0.05 ~ "*",
-      summ[,3] <= 0.01 ~ "**",
-      summ[,3] <= 0.001 ~ "***",
-      TRUE ~ NA_character_)
-  out <- data.frame(resp = gsub("\\s~.*", "", x@call[2]),
-    variable = row.names(summ), psig) 
-  out <- out[out$variable == "eff_rich:cluster",]
-  out$x <- 0
-  midpoint <- mean(rand_marg_df[rand_marg_df$resp == out$resp & 
-    rand_marg_df$eff_rich == 0,"pred"])
-  out$y <- midpoint + 
-    (max(rand_marg_df[rand_marg_df$resp == out$resp, "conf_hi"], na.rm = TRUE) - midpoint) * 0.25
-  return(out)
-  }))
-
-marg_signif$resp_clean <- factor(marg_signif$resp, 
-      levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
-      labels = resp_lookup[c(1,3,5,2,4,6)])
-
 pdf(file = "img/mod_marg.pdf", width = 12, height = 6)
 ggplot() + 
   geom_ribbon(data = rand_marg_df, 
@@ -273,7 +251,7 @@ ggplot() +
   labs(x = "Species richness", y = "")
 dev.off()
 
-# Post-hoc tests for significance of interaction slope differences
+# Post-hoc tests for significance of slope differences among clusters
 lsq_list <- lapply(best_int_ml_list, function(x) {
   emmeans(x, 
   pairwise ~ cluster*eff_rich, 
@@ -297,7 +275,15 @@ lsq_terms$contrast <- unlist(lapply(
   gsub("\\(", "", paste(x[1], x[2], sep = "-"))
 }))
 
-lsq_terms$resp <- factor(lsq_terms$resp, levels = names(resp_lookup), labels = resp_lookup)
+lsq_terms$resp <- as.character(factor(lsq_terms$resp, levels = names(resp_lookup), labels = resp_lookup))
+
+clust_combn <- dim(combn(seq_along(unique(dat_std$cluster)), 2))[2]
+
+resp_blanks <- seq_len(nrow(lsq_terms))[-which(seq_len(nrow(lsq_terms)) %in% 
+  seq(from = floor(median(seq_along(unique(lsq_terms$resp)))), 
+  by = clust_combn, length.out = clust_combn))]
+
+lsq_terms[resp_blanks, "resp"] <- ""
 
 lsq_terms_tab <- xtable(lsq_terms, 
   label = "lsq_terms",
@@ -311,7 +297,10 @@ names(lsq_terms_tab) <- c("Response", "Clusters", "Estimate", "SE", "DoF",
 fileConn <- file("out/lsq_terms.tex")
 writeLines(print(lsq_terms_tab, include.rownames = FALSE, 
     table.placement = "H",
-    hline.after = c(-1,0,seq(from = 3, by = 3, length.out = length(unique(lsq_terms$resp))-1)),
+    hline.after = c(-1,0,
+      seq(from = clust_combn, 
+        by = clust_combn, 
+        length.out = length(unique(resp_lookup)))),
     sanitize.text.function = function(x) {x}), 
   fileConn)
 close(fileConn)
@@ -343,19 +332,54 @@ diam_mod_slope_df <- do.call(rbind, lapply(diam_ml_list, function(x) {
 
 pdf(file = "img/diam_quad_mod_slopes.pdf", width = 6, height = 5)
 ggplot() +
-geom_vline(xintercept = 0, linetype = 2) +
-geom_errorbarh(data = diam_mod_slope_df, 
-  aes(xmin = conf.low, xmax = conf.high, y = resp, colour = group),
-  height = 0) + 
-geom_point(data = diam_mod_slope_df,
-  aes(x = estimate, y = resp, fill = group),
-  shape = 21, colour = "black") + 
-geom_text(data = diam_mod_slope_df,
-  aes(x = estimate, y = resp, colour = group, label = psig),
-  size = 8, nudge_y = 0.1) + 
-scale_fill_manual(name = "", values = pal[3:4]) +
-scale_colour_manual(name = "", values = pal[3:4]) +
-theme_panel() + 
-theme(legend.position = "none") + 
-labs(x = "Estimate", y = "")
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_errorbarh(data = diam_mod_slope_df, 
+    aes(xmin = conf.low, xmax = conf.high, y = resp, colour = group),
+    height = 0) + 
+  geom_point(data = diam_mod_slope_df,
+    aes(x = estimate, y = resp, fill = group),
+    shape = 21, colour = "black") + 
+  geom_text(data = diam_mod_slope_df,
+    aes(x = estimate, y = resp, colour = group, label = psig),
+    size = 8, nudge_y = 0.1) + 
+  scale_fill_manual(name = "", values = pal[3:4]) +
+  scale_colour_manual(name = "", values = pal[3:4]) +
+  theme_panel() + 
+  theme(legend.position = "none") + 
+  labs(x = "Estimate", y = "")
+dev.off()
+
+diam_int_mod_flist <- paste0(names(resp_lookup), " ~ diam_quad_mean + (diam_quad_mean|cluster)")
+
+diam_int_ml_list <- lapply(diam_int_mod_flist, function(x) {
+  lmer(x, data = dat_std, REML = FALSE)
+  })
+
+rand_marg_df <- do.call(rbind, lapply(diam_int_ml_list, function(x) {
+  preds <- ggpredict(x, terms = c("diam_quad_mean", "cluster"), 
+    type = "re", interval = "confidence", ci.lvl = 0.5)
+  preds$resp <- gsub("\\s~.*", "", x@call[[2]])[2]  
+  names(preds) <- c("diam_quad_mean", "pred", "se", "conf_lo", "conf_hi", "cluster", "resp")
+  return(preds)
+}))
+
+rand_marg_df$resp_clean <- factor(rand_marg_df$resp, 
+      levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
+      labels = resp_lookup[c(1,3,5,2,4,6)])
+
+pdf(file = "img/diam_mod_marg.pdf", width = 12, height = 6)
+ggplot() + 
+  geom_ribbon(data = rand_marg_df, 
+    aes(x = diam_quad_mean, ymin = conf_lo, ymax = conf_hi, colour = cluster), 
+    linetype = 2, alpha = 0.2, fill = NA) + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) +
+  new_scale_colour() + 
+  geom_line(data = rand_marg_df, 
+    aes(x = diam_quad_mean, y = pred, colour = cluster),
+    size = 1.5) + 
+  scale_colour_manual(name = "Cluster", 
+    values = brightness(clust_pal, 0.75)) +
+  facet_wrap(~resp_clean, scales = "free_y") + 
+  theme_panel() +
+  labs(x = "Tree size", y = "")
 dev.off()
