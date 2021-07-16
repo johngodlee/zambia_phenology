@@ -8,7 +8,6 @@ library(dplyr)
 library(tidyr)
 library(tibble)
 library(ggplot2)
-library(ggfortify)
 library(ggnewscale)
 library(shades)
 library(gridExtra)
@@ -25,6 +24,7 @@ dat <- st_as_sf(dat)
 phen_stack <- readRDS("dat/vipphen_stack.rds")
 
 af <- st_read("dat/africa_countries/africa.shp")
+
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
 
@@ -317,10 +317,14 @@ dat_manova <- dat_std %>%
 phen_manova <- manova(as.matrix(dat_manova[,grepl("_std", names(dat_manova))]) ~ 
   dat_manova$cluster)
 
-# Tukey's tests for each phenological metric per cluster
-resps <- names(dat_manova)[grepl("_std", names(dat_manova))]
+phen_manova_fmt <- paste0("F(", summary(phen_manova)$stats[1], ",", 
+  summary(phen_manova)$stats[2], ")=", round(summary(phen_manova)$stats[5], 2), 
+  ", ", pFormat(summary(phen_manova)$stats[11]))
 
-resps_out <- do.call(rbind, lapply(resps, function(x) {
+# Tukey's tests for each phenological metric per cluster
+manova_resp <- names(dat_manova)[grepl("_std", names(dat_manova))]
+
+tukey_out <- do.call(rbind, lapply(manova_resp, function(x) {
   mod <- aov(dat_manova[[x]] ~ dat_manova$cluster)
   tukey <- TukeyHSD(mod)
   tukey_clean <- rownames_to_column(as.data.frame(tukey[[1]]), "comp")
@@ -329,7 +333,49 @@ resps_out <- do.call(rbind, lapply(resps, function(x) {
   }))
 
 # Are all intervals overlapping 0?
-all(resps_out$upr - resps_out$lwr >= 0)
+all(tukey_out$upr - tukey_out$lwr >= 0)
+
+tukey_out_clean <- tukey_out %>%
+  mutate(
+    diff = round(diff, 2), 
+    int = paste(round(lwr, 2), round(upr, 2), sep = " - "),
+    `p adj` = pFormat(`p adj`),
+    resp = as.character(factor(.$resp, 
+      levels = paste0(names(resp_lookup[c(1,3,5,2,4,6)]), "_std"), 
+      labels = resp_lookup[c(1,3,5,2,4,6)]))) %>%
+  dplyr::select(
+    resp,
+    comp, 
+    diff,
+    int,
+    `p adj`)
+
+clust_combn <- dim(combn(seq_along(unique(dat_std$cluster)), 2))[2]
+
+resp_blanks <- seq_len(nrow(tukey_out_clean))[-which(seq_len(nrow(tukey_out_clean)) %in% 
+  seq(from = floor(median(seq_along(unique(tukey_out_clean$resp)))), 
+  by = clust_combn, length.out = clust_combn))]
+
+tukey_out_clean[resp_blanks, "resp"] <- ""
+
+tukey_terms_tab <- xtable(tukey_out_clean, 
+  label = "tukey_terms",
+  align = "rrcccc",
+  display = c("s", "s", "s", "s", "s", "s"),
+  digits = c(  0,   0,   0,   0,   0,   0 ),
+  caption = "Post-hoc Tukey's pairwise comparisons among vegetation types for each phenological metric.")
+names(tukey_terms_tab) <- c("Response", "Clusters", "Mean diff.", "Interval", "Prob.")
+  
+fileConn <- file("out/tukey_terms.tex")
+writeLines(print(tukey_terms_tab, include.rownames = FALSE, 
+    table.placement = "H",
+    hline.after = c(-1,0,
+      seq(from = clust_combn, 
+        by = clust_combn, 
+        length.out = length(unique(resp_lookup)))),
+    sanitize.text.function = function(x) {x}), 
+  fileConn)
+close(fileConn)
 
 # Plot location map
 s1_length_tile <- as.data.frame(
@@ -350,9 +396,11 @@ ggplot() +
   labs(x = "", y = "")
 dev.off()
 
-# How many sites are there?
+# Write variables
 write(
-  commandOutput(nrow(dat_nogeom), "nSites"),
+  c(
+    commandOutput(phen_manova_fmt, "phenManova")
+    ),
   file = "out/analysis_vars.tex")
 
 # Save data ready for models

@@ -16,7 +16,7 @@ all : $(TEXFILE).pdf
 # R scripts
 
 # Data prep
-$(DATDIR)/plots.rds $(DATDIR)/sites_loc.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex $(DATDIR)/ba_clust_mat.rds : data_prep.R $(DATDIR)/plots_v2.12.csv
+$(DATDIR)/plots.rds $(DATDIR)/sites_loc.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex $(DATDIR)/ba_clust_mat.rds : data_prep.R functions.R $(DATDIR)/plots_v2.12.csv
 	@echo Data preparation
 	Rscript $<
 # Feeds into modis_get.R, trmm_get.R, try_get.R, vipphen.R
@@ -43,7 +43,7 @@ $(DATDIR)/plots_div.rds $(OUTDIR)/clust_summ.tex $(OUTDIR)/diversity_vars.tex : 
 	Rscript $<
 
 # Analysis prep
-$(DATDIR)/plots_anal.rds $(OUTDIR)/analysis_vars.tex $(IMGDIR)/phen_dens_clust.pdf $(IMGDIR)/plot_loc.pdf : analysis.R functions.R $(DATDIR)/plots_div.rds $(DATDIR)/vipphen_stack.rds 
+$(DATDIR)/plots_anal.rds $(IMGDIR)/phen_dens_clust.pdf $(IMGDIR)/plot_loc.pdf : analysis.R functions.R $(DATDIR)/plots_div.rds $(DATDIR)/vipphen_stack.rds 
 	@echo Analysis preparation
 	Rscript $<
 
@@ -67,7 +67,7 @@ $(IMGDIR)/schematic.pdf : drawio/schematic.drawio
 	./drawio_export.sh $< $@
 
 # Format some tables
-$(OUTDIR)/all_mod_sel_fmt.tex : $(OUTDIR)/all_mod_sel.tex 
+$(OUTDIR)/all_mod_sel_fmt.tex $(OUTDIR)/lsq_terms_fmt.tex : $(OUTDIR)/all_mod_sel.tex $(OUTDIR)/lsq_terms.tex
 	@echo Format tables
 	./table_fmt.sh $< $@
 
@@ -80,7 +80,8 @@ $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(IMGDIR)/mod_marg.pdf\
 	$(IMGDIR)/schematic.pdf\
 	$(IMGDIR)/phen_dens_clust.pdf\
-	$(OUTDIR)/all_mod_sel.tex\
+	$(OUTDIR)/all_mod_sel_fmt.tex\
+	$(OUTDIR)/lsq_terms_fmt.tex\
 	$(OUTDIR)/clust_summ.tex
 	@echo Compile manuscript
 	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make -bibtex $<

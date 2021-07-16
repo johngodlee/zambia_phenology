@@ -1,5 +1,5 @@
 # Define variable name lookup
-pred_lookup <- c("Richness", "Evenness", "Stem density",  
+pred_lookup <- c("Diversity", "Evenness", "Stem density",  
   "MAP", "Wet season precip.", "Pre-green-up precip.", "Pre-senescence precip.",
     "Vegetation type", "Diurnal dT", "Stem diameter", "Stem diameter variance")
 names(pred_lookup) <- c("eff_rich", "evenness", "n_stems_ge10_ha",

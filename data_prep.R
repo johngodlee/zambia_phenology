@@ -165,6 +165,10 @@ diam_summ <- tree_fil %>%
   dplyr::select(plot_cluster, diam_quad_mean, diam_cov)
 
 # Create tree species abundance matrix by plot cluster
+ab_plot_mat <- abMat(tree_fil, site_id = "plot_id", 
+  species_id = "species_name_clean") %>%
+  dplyr::select(-`Indet indet`)
+
 ba_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
   species_id = "species_name_clean", abundance = "ba") %>%
   dplyr::select(-`Indet indet`)
@@ -181,6 +185,7 @@ stopifnot(nrow(ba_clust_mat) == nrow(plots_clean))
 saveRDS(plots_clean, "dat/plots.rds")
 saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 saveRDS(ba_clust_mat, "dat/ba_clust_mat.rds")
+saveRDS(ab_plot_mat, "dat/ab_plot_mat.rds")
 
 # Write stats to .tex
 write(
