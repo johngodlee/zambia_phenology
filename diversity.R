@@ -26,6 +26,8 @@ ab_plot_mat <- readRDS("dat/ab_plot_mat.rds")
 
 ba_clust_mat <- readRDS("dat/ba_clust_mat.rds")
 
+evi <- readRDS("dat/evi_all.rds")
+
 # Filter basal area matrix to plots in `dat`
 ba_clust_mat <- ba_clust_mat[row.names(ba_clust_mat) %in% dat$plot_cluster,]
 ba_clust_mat <- ba_clust_mat[,colSums(ba_clust_mat) > 0]
@@ -295,8 +297,53 @@ dev.off()
 stopifnot(nrow(dat) == nrow(dat_div))
 stopifnot(all(!is.na(dat_div$plot_cluster)))
 
+# Calculate mean pairwise Bray distances within each cluster
+# Filter to plots we're using 
+tree_ab_mat_plot_fil <- ab_plot_mat %>%
+  rownames_to_column("plot_id") %>%
+  left_join(., plot_id_lookup, by = "plot_id") %>%
+  filter(plot_cluster %in% dat_div$plot_cluster) %>%
+  dplyr::select(-plot_id) 
+
+# Mean pairwise Bray distance across all plots
+tree_ab_mat_plot_fil_fil <- tree_ab_mat_plot_fil %>%
+  dplyr::select(-plot_cluster) %>%
+  filter(rowSums(.) != 0)
+plot_dist_all_mean <- mean(vegdist(tree_ab_mat_plot_fil_fil))
+
+# Split by plot cluster
+tree_ab_mat_plot_fil_split <- split(tree_ab_mat_plot_fil, tree_ab_mat_plot_fil$plot_cluster)
+
+# Bray distance among plots in each cluster
+plot_dist_mean <- unlist(lapply(tree_ab_mat_plot_fil_split, function(x) {
+  x %>% 
+    dplyr::select(-plot_cluster) %>%
+    dplyr::select(where(~ any(. != 0))) %>%
+    vegdist() %>%
+    mean()
+  }))
+
+pdf(file = "img/plot_dist_hist.pdf", width = 8, height = 6)
+ggplot() + 
+  geom_histogram(data = data.frame(plot_dist_mean), aes(x = plot_dist_mean), 
+    fill = pal[6], colour = "black", binwidth = 0.05 ) +
+  geom_vline(xintercept = plot_dist_all_mean, colour = "red") + 
+  theme_panel() + 
+  labs(x = "Mean pairwise Bray distance within cluster", y = "Frequency")
+dev.off()
+
+# Percentage of clusters with mean pairwise distance lower than the mean across all pairs
+plot_dist_mean_clean <- plot_dist_mean[!is.na(plot_dist_mean)]
+plot_dist_over <- which(plot_dist_mean_clean < plot_dist_all_mean)
+plot_dist_per <- round(length(plot_dist_over) / length(plot_dist_mean_clean) * 100, 1)
+
+dat_div_fil <- dat_div[dat_div$plot_cluster %in% names(plot_dist_over),]
+
+# How many sites
+n_sites <- nrow(dat_div_fil)
+
 # Create table of species indicators and climatic data per cluster
-clust_summ <- dat_div %>% 
+clust_summ <- dat_div_fil %>% 
   st_drop_geometry() %>%
   group_by(cluster) %>%
   summarise(
@@ -337,48 +384,41 @@ writeLines(print(clust_summ_xtable, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-# Calculate mean pairwise Bray distances within each cluster
-# Filter to plots we're using 
-tree_ab_mat_plot_fil <- ab_plot_mat %>%
-  rownames_to_column("plot_id") %>%
-  left_join(., plot_id_lookup, by = "plot_id") %>%
-  filter(plot_cluster %in% dat_div$plot_cluster) %>%
-  dplyr::select(-plot_id) 
 
-# Mean pairwise Bray distance across all plots
-tree_ab_mat_plot_fil_fil <- tree_ab_mat_plot_fil %>%
-  dplyr::select(-plot_cluster) %>%
-  filter(rowSums(.) != 0)
-plot_dist_all_mean <- mean(vegdist(tree_ab_mat_plot_fil_fil))
+# Subset EVI time series to plots 
+evi_fil <- evi[names(evi) %in% dat_div_fil$plot_cluster]
 
-# Split by plot cluster
-tree_ab_mat_plot_fil_split <- split(tree_ab_mat_plot_fil, tree_ab_mat_plot_fil$plot_cluster)
+stopifnot(all(dat_div_fil$plot_cluster == names(evi_fil)))
 
-# Bray distance among plots in each cluster
-plot_dist_mean <- unlist(lapply(tree_ab_mat_plot_fil_split, function(x) {
-  x %>% 
-    dplyr::select(-plot_cluster) %>%
-    dplyr::select(where(~ any(. != 0))) %>%
-    vegdist() %>%
-    mean()
+# Get all time series and clusters in tidy dataframe
+gam_all <- do.call(rbind, lapply(unique(dat_div_fil$cluster), function(x) {
+  out_df <- do.call(rbind, lapply(evi_fil[names(evi_fil) %in% 
+      dat_div_fil$plot_cluster[dat_div_fil$cluster == x]], function(y) {
+    out <- y$seas
+    out$plot_cluster <- unique(y$series$plot_cluster)
+    return(out)
   }))
+  out_df$cluster <- x
+  return(out_df)
+}))
 
-pdf(file = "img/plot_dist_hist.pdf", width = 8, height = 6)
+gam_all_clean <- gam_all[gam_all$doy < quantile(gam_all$doy, 0.99) &
+  gam_all$doy > quantile(gam_all$doy, 0.01),]
+
+# Plot of mean time series per cluster
+pdf(file = "img/gam_compare_clust.pdf", width = 8, height = 5)
 ggplot() + 
-  geom_histogram(data = data.frame(plot_dist_mean), aes(x = plot_dist_mean), 
-    fill = pal[6], colour = "black", binwidth = 0.05 ) +
-  geom_vline(xintercept = plot_dist_all_mean, colour = "red") + 
+  stat_summary(data = gam_all_clean, 
+     aes(x = doy, y = pred, fill = as.character(cluster)),
+     fun.data = mean_se, geom = "ribbon", alpha = 0.5) + 
+   stat_summary(data = gam_all_clean, 
+     aes(x = doy, y = pred, colour = as.character(cluster)), 
+     fun = mean, geom = "line") + 
+  scale_fill_manual(name = "Cluster", values = clust_pal) +
+  scale_colour_manual(name = "Cluster", values = clust_pal) +
   theme_panel() + 
-  labs(x = "Mean pairwise Bray distance within cluster", y = "Frequency")
+  labs(x = "Days from 1st Jan.", y = "EVI") 
 dev.off()
-
-# Percentage of clusters with mean pairwise distance lower than the mean across all pairs
-plot_dist_mean_clean <- plot_dist_mean[!is.na(plot_dist_mean)]
-plot_dist_per <- round(length(which(plot_dist_mean_clean < plot_dist_all_mean)) / 
-  length(plot_dist_mean_clean) * 100, 1)
-
-# How many sites
-n_sites <- nrow(dat_div)
 
 write(
   c(
@@ -390,4 +430,4 @@ write(
   file = "out/diversity_vars.tex")
 
 # Write file
-saveRDS(dat_div, "dat/plots_div.rds") 
+saveRDS(dat_div_fil, "dat/plots_div.rds") 

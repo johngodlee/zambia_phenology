@@ -9,6 +9,8 @@ library(tidyr)
 library(tibble)
 library(ggplot2)
 library(ggnewscale)
+library(patchwork)
+library(scico)
 library(shades)
 library(gridExtra)
 library(raster)
@@ -28,6 +30,13 @@ af <- st_read("dat/africa_countries/africa.shp")
 zambia <- af %>% 
   filter(sov_a3 == "ZMB")
 
+bioclim <- readRDS("dat/bioclim_zambia.rds")
+
+lcc <- raster("dat/zambia_landcover/lcc.tif")
+
+# EVI division factor
+evi_div <- 100000
+
 # Calculate some statistics
 dat_clean <- dat %>%
   mutate(
@@ -35,7 +44,7 @@ dat_clean <- dat %>%
       labels = clust_lookup[1:length(unique(dat$cluster))]),
     start_lag = -(s1_start - trmm_start),
     end_lag = s1_end - trmm_end,
-    cum_vi = cum_vi / 100000)
+    cum_vi = cum_vi / evi_div)
 
 dat_nogeom <- st_drop_geometry(dat_clean) %>%
   filter(plot_cluster != "ZIS_1232")
@@ -118,47 +127,12 @@ ggplot() +
 dev.off()
 
 # Create bivariate relationships plot
-bivar_list <- c(
-  "cum_vi ~ eff_rich",
-  "cum_vi ~ n_stems_ge10_ha",
-  "cum_vi ~ map",
-  "cum_vi ~ diurnal_temp_range",
-  "cum_vi ~ diam_quad_mean",
+bivar_list <- expand.grid(names(pred_lookup)[which(names(pred_lookup) != "cluster")], 
+  names(resp_lookup))
 
-  "s1_length ~ eff_rich",
-  "s1_length ~ n_stems_ge10_ha",
-  "s1_length ~ map",
-  "s1_length ~ diurnal_temp_range",
-  "s1_length ~ diam_quad_mean",
-
-  "s1_green_rate ~ eff_rich",
-  "s1_green_rate ~ n_stems_ge10_ha",
-  "s1_green_rate ~ map",
-  "s1_green_rate ~ diurnal_temp_range",
-  "s1_green_rate ~ diam_quad_mean",
-
-  "s1_senes_rate ~ eff_rich",
-  "s1_senes_rate ~ n_stems_ge10_ha",
-  "s1_senes_rate ~ map",
-  "s1_senes_rate ~ diurnal_temp_range",
-  "s1_senes_rate ~ diam_quad_mean",
-
-  "start_lag ~ eff_rich",
-  "start_lag ~ n_stems_ge10_ha",
-  "start_lag ~ map",
-  "start_lag ~ diurnal_temp_range", 
-  "start_lag ~ diam_quad_mean",
-
-  "end_lag ~ eff_rich",
-  "end_lag ~ n_stems_ge10_ha",
-  "end_lag ~ map",
-  "end_lag ~ diurnal_temp_range",
-  "end_lag ~ diam_quad_mean"
-)
-
-bivar_df <- as.data.frame(do.call(rbind, lapply(bivar_list, function(x) {
-  x_var <- sym(unlist(strsplit(x, split = " ~ "))[2])
-  y_var <- sym(unlist(strsplit(x, split = " ~ "))[1])
+bivar_df <- as.data.frame(do.call(rbind, apply(bivar_list, 1, function(x) {
+  x_var <- sym(x[1])
+  y_var <- sym(x[2])
 
   dat_nogeom %>% 
     dplyr::select(!!x_var, !!y_var, cluster) %>%
@@ -175,7 +149,7 @@ bivar_df$y <- factor(bivar_df$y, levels = names(resp_lookup))
 #  ggplot(., aes(x = pred, y = resp)) + 
 #  geom_point()
 
-pdf(file = "img/bivar.pdf", width = 15, height = 10)
+pdf(file = "img/bivar.pdf", width = 22, height = 10)
 ggplot() + 
   geom_point(data = bivar_df, aes(x = pred, y = resp, fill = cluster), 
 	colour = "black", shape = 21) +
@@ -189,6 +163,23 @@ ggplot() +
   scale_colour_manual(name = "", values = brightness(clust_pal, 0.5)) + 
   theme_panel() + 
   labs(x = "", y = "")
+dev.off()
+
+# Does sp indets correlate with any explan or resp vars?
+indet_bivar <- dat_nogeom %>%
+  dplyr::select(cluster, perindetid, names(pred_lookup), names(resp_lookup)) %>%
+  gather(key, value, -perindetid, -cluster)
+
+pdf(file = "img/indet_bivar.pdf", width = 12, height = 10)
+ggplot(indet_bivar, aes(x = perindetid * 100, y = value)) + 
+  geom_point(aes(fill = cluster), colour = "black", shape = 21) +
+  geom_smooth(method = "lm", colour = "black", se = FALSE, size = 1.5) + 
+  geom_smooth(aes(colour = cluster), method = "lm", se = FALSE) + 
+  facet_wrap(~key, scales = "free") + 
+  theme_panel() + 
+  scale_fill_manual(name = "", values = clust_pal) + 
+  scale_colour_manual(name = "", values = brightness(clust_pal, 0.5)) + 
+  labs(x = "Unidentified trees (%)", y = "")
 dev.off()
 
 # Scatter plots comparing each phenological metric
@@ -377,29 +368,73 @@ writeLines(print(tukey_terms_tab, include.rownames = FALSE,
   fileConn)
 close(fileConn)
 
-# Plot location map
+# Mask land cover to get non-woodland savannas bits
+lcc[lcc %in% 1:10] <- NA
+lcc_wgs84 <- projectRaster(lcc, crs = st_crs(zambia)$proj4string)
+lcc_mask <- mask(crop(lcc_wgs84, zambia), zambia)
+
+# Aggregate to same resolution as phenology
+lcc_agg <- resample(lcc_mask, phen_stack)
+
+# Mask phenology by land cover
+s1_length_mask <- mask(phen_stack$X3, lcc_agg, inverse = TRUE)
+
+# Convert to dataframe
 s1_length_tile <- as.data.frame(
-  as(phen_stack$X3, "SpatialPixelsDataFrame")  # s1_length
+  as(s1_length_mask, "SpatialPixelsDataFrame")
 )
 
+# Plot location map
 pdf(file = "img/plot_loc.pdf", height = 8, width = 10)
-ggplot() +
+(plot_loc <- ggplot() +
   geom_tile(data = s1_length_tile, aes(x = x, y = y, fill = X3)) +
   scale_fill_gradient(name = "Season length\n(days)", low = "black" , high = pal[6], 
     limits = c(100, 300)) + 
   new_scale_fill() +
   geom_sf(data = zambia, colour = "black", fill = NA) +
   geom_sf(data = dat_clean, aes(fill = cluster), 
-    colour = "black", shape = 24, size = 3) +
+    colour = "black", shape = 24, size = 2) +
   theme_panel() + 
   scale_fill_manual(name = "Cluster", values = clust_pal) + 
-  labs(x = "", y = "")
+  labs(x = "", y = ""))
+dev.off()
+
+# Plots in climate space
+bioclim_val <- as.data.frame(values(bioclim)) %>%
+  filter(!is.na(bioclim.1))
+
+pdf(file = "img/plot_clim.pdf", width = 10, height = 8)
+(plot_clim <- ggplot() + 
+  geom_bin2d(data = bioclim_val, 
+    mapping = aes(x = bioclim.1, y = bioclim.12, fill = ..count..), 
+    bins = 100) +
+  scale_fill_scico(name = "Pixel density", palette = "bamako",
+     trans = "log", breaks = c(1, 10, 100, 1000, 10000)) + 
+  new_scale_fill() + 
+  geom_point(data = dat_clean, 
+    aes(x = mat, y = map, fill = cluster),
+    shape = 24, size = 2) + 
+  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  stat_ellipse(data = dat_clean,
+    aes(x = mat, y = map, colour = as.character(cluster)), 
+    type = "t", level = 0.95, size = 1.2, show.legend = FALSE) + 
+  scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  theme_panel() + 
+  labs(x = expression("MAT" ~ (degree*C)), 
+    y = expression("MAP" ~ (mm ~ y^-1))))
+dev.off()
+
+# Plot climate and location together
+pdf(file = "img/plot_loc_clim.pdf", width = 15, height = 8)
+plot_loc + plot_clim + 
+  plot_layout(guides = "collect")
 dev.off()
 
 # Write variables
 write(
   c(
-    commandOutput(phen_manova_fmt, "phenManova")
+    commandOutput(phen_manova_fmt, "phenManova"),
+    commandOutput(evi_div, "eviDiv")
     ),
   file = "out/analysis_vars.tex")
 

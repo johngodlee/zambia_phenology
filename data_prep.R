@@ -145,14 +145,45 @@ tree_fil <- trees %>%
     plot_cluster %in% plot_50t, 
     plot_cluster %in% plot_native)
 
-# How many trees could not be identified?
-ntrees <- length(tree_fil$species_name_clean)
-nspindet <- sum(grepl("indet", tree_fil$species_name_clean) & 
-  !grepl("Indet indet", tree_fil$species_name_clean)) 
-perspindet <- nspindet / ntrees * 100
-nuniquespindet <- length(unique(tree_fil$species_name_clean[grepl("indet", tree_fil$species_name_clean)]))
-ngenindet <- sum(grepl("Indet indet", tree_fil$species_name_clean))
-pergenindet <- ngenindet / ntrees * 100
+# How many trees could not be identified, per plot cluster
+sp_id_summ <- tree_fil %>% 
+  group_by(plot_cluster) %>%
+  summarise(
+    perspid = sum(!grepl("indet", species_name_clean)) / n(),
+    pergenid = sum(grepl("indet", species_name_clean) &
+      !grepl("Indet indet", species_name_clean) & 
+      !grepl("eae indet$", species_name_clean)) / n(),
+    perfamid = sum(grepl("eae indet$", species_name_clean)) / n(),
+    perindetid = sum(grepl("Indet indet", species_name_clean) / n()))
+
+# How many species could not be identified, total
+ntrees <- nrow(tree_fil)
+
+# To species
+nsp <- sum(!grepl("indet", tree_fil$species_name_clean))
+perspid <- nsp / ntrees * 100
+
+# To genus
+ngen <- sum(grepl("indet", tree_fil$species_name_clean) &
+  !grepl("Indet indet", tree_fil$species_name_clean) & 
+  !grepl("eae indet$", tree_fil$species_name_clean))
+pergenid <- ngen / ntrees * 100
+
+# To family
+nfam <- sum(grepl("eae indet$", tree_fil$species_name_clean))
+perfamid <- nfam / ntrees * 100
+
+# No ID
+nindet <- sum(grepl("Indet indet", tree_fil$species_name_clean))
+perindetid <- nindet / ntrees * 100
+
+# What basal area do unidentified individuals constitute?
+perspba <- sum(tree_fil$ba[!grepl("indet", tree_fil$species_name_clean)]) / sum(tree_fil$ba) * 100
+pergenba <- sum(tree_fil$ba[grepl("indet", tree_fil$species_name_clean) &
+  !grepl("Indet indet", tree_fil$species_name_clean) & 
+  !grepl("eae indet$", tree_fil$species_name_clean)]) / sum(tree_fil$ba) * 100
+perfamba <- sum(tree_fil$ba[grepl("eae indet$", tree_fil$species_name_clean)])
+perindetba <- sum(tree_fil$ba[grepl("Indet indet", tree_fil$species_name_clean)]) / sum(tree_fil$ba) * 100
 
 # Find quadratic mean of tree diameter per site, and diam CoV
 diam_summ <- tree_fil %>%
@@ -169,6 +200,14 @@ ab_plot_mat <- abMat(tree_fil, site_id = "plot_id",
   species_id = "species_name_clean") %>%
   dplyr::select(-`Indet indet`)
 
+ba_plot_mat <- abMat(tree_fil, site_id = "plot_id", 
+  species_id = "species_name_clean", abundance = "ba") %>%
+  dplyr::select(-`Indet indet`)
+
+ab_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
+  species_id = "species_name_clean") %>%
+  dplyr::select(-`Indet indet`)
+
 ba_clust_mat <- abMat(tree_fil, site_id = "plot_cluster", 
   species_id = "species_name_clean", abundance = "ba") %>%
   dplyr::select(-`Indet indet`)
@@ -176,7 +215,8 @@ ba_clust_mat <- abMat(tree_fil, site_id = "plot_cluster",
 # Filter plots data to match sites in filtered tree data
 plots_clean <- plots_fil_sf %>% 
   filter(plot_cluster %in% tree_fil$plot_cluster) %>%
-  left_join(., diam_summ, by = "plot_cluster")
+  left_join(., diam_summ, by = "plot_cluster") %>%
+  left_join(., sp_id_summ, by = "plot_cluster")
 
 # Are all plots in both objects?
 stopifnot(nrow(ba_clust_mat) == nrow(plots_clean))
@@ -185,6 +225,8 @@ stopifnot(nrow(ba_clust_mat) == nrow(plots_clean))
 saveRDS(plots_clean, "dat/plots.rds")
 saveRDS(plot_id_lookup, "dat/plot_id_lookup.rds")
 saveRDS(ba_clust_mat, "dat/ba_clust_mat.rds")
+saveRDS(ab_clust_mat, "dat/ab_clust_mat.rds")
+saveRDS(ba_plot_mat, "dat/ba_plot_mat.rds")
 saveRDS(ab_plot_mat, "dat/ab_plot_mat.rds")
 
 # Write stats to .tex
@@ -195,8 +237,10 @@ write(
     commandOutput(n_total_sites, "nTotalSites"),
     commandOutput(ntrees, "nTrees"),
     commandOutput(trees_ha, "treesHa"),
-    commandOutput(round(perspindet, 1), "perSpIndet"),
-    commandOutput(round(pergenindet, 1), "perGenIndet")
+    commandOutput(round(perspid, 1), "perSp"),
+    commandOutput(round(pergenid, 1), "perGen"),
+    commandOutput(round(perfamid, 1), "perFam"),
+    commandOutput(round(perindetid, 1), "perIndet")
     ),
   file = "out/data_prep_vars.tex")
 
