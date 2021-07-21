@@ -43,12 +43,12 @@ $(DATDIR)/plots_div.rds $(OUTDIR)/clust_summ.tex $(OUTDIR)/diversity_vars.tex : 
 	Rscript $<
 
 # Analysis prep
-$(DATDIR)/plots_anal.rds $(IMGDIR)/phen_dens_clust.pdf $(IMGDIR)/plot_loc.pdf : analysis.R functions.R $(DATDIR)/plots_div.rds $(DATDIR)/vipphen_stack.rds 
+$(DATDIR)/plots_anal.rds $(IMGDIR)/phen_dens_clust.pdf $(IMGDIR)/plot_loc.pdf $(OUTDIR)/analysis_vars.tex : analysis.R functions.R $(DATDIR)/plots_div.rds $(DATDIR)/vipphen_stack.rds 
 	@echo Analysis preparation
 	Rscript $<
 
 # Models
-$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/mod_stat.tex $(OUTDIR)/all_mod_sel.tex : models.R functions.R $(DATDIR)/plots_anal.rds 
+$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/mod_stat.tex $(OUTDIR)/all_mod_sel.tex $(OUTDIR)/models_vars.tex : models.R functions.R $(DATDIR)/plots_anal.rds 
 	@echo Models
 	Rscript $<
 
@@ -57,7 +57,8 @@ $(OUTDIR)/vars.tex : $(OUTDIR)/data_prep_vars.tex\
 	$(OUTDIR)/modis_extract_vars.tex\
 	$(OUTDIR)/trmm_extract_vars.tex\
 	$(OUTDIR)/diversity_vars.tex\
-	$(OUTDIR)/analysis_vars.tex
+	$(OUTDIR)/analysis_vars.tex\
+	$(OUTDIR)/models_vars.tex
 	@echo Compile LaTeX variables
 	cat $^ > $@
 
@@ -91,9 +92,10 @@ clean :
 	@echo Clean LaTeX files
 	latexmk -C
 
-# Re-create time series and trait values
+# Re-create time series and trait values, needs external data
 get : 
 	@echo Extract raw time series data
+	Rscript zambia_clim_get.R
 	Rscript modis_get.R
 	Rscript trmm_get.R
 	Rscript try_get.R

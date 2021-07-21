@@ -64,8 +64,6 @@ evi_seas_list <- lapply(evi_ts_list, function(x) {
 evi_clean <- do.call(rbind, do.call(rbind, evi_seas_list)) %>%
   filter(!is.na(evi))
 
-saveRDS(evi_clean, "dat/evi_ts.rds")
-
 # Create time series plots
 pdf(file = "img/evi_ts.pdf", width = 12, height = 8)
 ggplot() +
@@ -84,20 +82,21 @@ evi_split <- split(evi_clean, evi_clean$plot_cluster)
 pred_data <- seq(min(evi_split[[1]]$doy), max(evi_split[[1]]$doy))
 
 gam_list <- lapply(evi_split, function(x) {
+  series <- x
   mod <- gam(evi ~ s(doy), data = x)
   pred <- predict(mod, newdata = data.frame(doy = pred_data))
-  out <- list(mod = mod, pred = data.frame(pred, doy = pred_data))
+  out <- list(series = series, mod = mod, pred = data.frame(pred, doy = pred_data))
 })
 
 # Calculate key statistics: 
 phen_df <- data.frame(plot_cluster = names(gam_list))
 
 # Max and min EVI
-phen_df$max_vi <- unlist(lapply(gam_list, function(x) {max(x[[2]][1:355, "pred"])}))
+phen_df$max_vi <- unlist(lapply(gam_list, function(x) {max(x[[3]][1:355, "pred"])}))
 phen_df$max_vi_date <- unlist(lapply(gam_list, function(x) {
-    x[[2]][which.max(x[[2]][1:355, "pred"]), "doy"]
+    x[[3]][which.max(x[[3]][1:355, "pred"]), "doy"]
   }))
-phen_df$min_vi <- unlist(lapply(gam_list, function(x) {min(x[[2]][1:355, "pred"])}))
+phen_df$min_vi <- unlist(lapply(gam_list, function(x) {min(x[[3]][1:355, "pred"])}))
 
 # Start of growing season
 win_len <- 20
@@ -107,8 +106,8 @@ win_len <- 20
 ##' First rolling period where positive slope of GAM exceeds 50% of max slope
 phen_df$s1_start <- unlist(lapply(seq(length(gam_list)), function(x) {
   # Extract mod and predicted values
-  mod <- gam_list[[x]][[1]] 
-  pred <- gam_list[[x]][[2]]
+  mod <- gam_list[[x]][[2]] 
+  pred <- gam_list[[x]][[3]]
   
   # First derivative
   der <- as.data.frame(derivatives(mod, type = "forward", 
@@ -136,8 +135,8 @@ phen_df$s1_start <- unlist(lapply(seq(length(gam_list)), function(x) {
 ##' Filter to after max EVI
 ##' Final 1 day period where negative slope of GAM exceeds 50% of GAM
 phen_df$s1_end <- unlist(lapply(seq(length(gam_list)), function(x) {
-  mod <- gam_list[[x]][[1]] 
-  pred <- gam_list[[x]][[2]]
+  mod <- gam_list[[x]][[2]] 
+  pred <- gam_list[[x]][[3]]
 
   # First derivative
   der <- as.data.frame(derivatives(mod, type = "backward", 
@@ -164,32 +163,40 @@ phen_df$s1_end <- unlist(lapply(seq(length(gam_list)), function(x) {
 ##' Days between start and end
 phen_df$s1_length <- phen_df$s1_end - phen_df$s1_start
 
-# Remove bogus values 
+# Find bogus values 
 phen_df_fil <- phen_df %>%
   filter(s1_start > -200,
     s1_end < 300,
     s1_length < 500,
     max_vi > 1000, 
     min_vi > 500)
+
+# Filter plots to remove bogus values
 gam_list_fil <- gam_list[names(gam_list) %in% unique(phen_df_fil$plot_cluster)]
 
 # Subset GAM predicted values to within start and end of season
-gam_fil <- lapply(seq(length(gam_list_fil)), function(x) {
-  mod <- gam_list_fil[[x]][[2]]
-  mod[mod$doy >= phen_df_fil[x, "s1_start"] & mod$doy <= phen_df_fil[x, "s1_end"],]
+gam_list_seas <- lapply(seq(length(gam_list_fil)), function(x) {
+  pred <- gam_list_fil[[x]][[3]]
+  pred <- pred[pred$doy >= phen_df_fil[x, "s1_start"] & 
+    pred$doy <= phen_df_fil[x, "s1_end"],]
+  gam_list_fil[[x]][["seas"]] <- pred
+  return(gam_list_fil[[x]])
 })
+names(gam_list_seas) <- names(gam_list_fil)
 
 # Average VI 
 ##' Mean of all values within growing season
-phen_df_fil$avg_vi <- unlist(lapply(gam_fil, function(x) {mean(x[["pred"]])}))
+phen_df_fil$avg_vi <- unlist(lapply(gam_list_seas, function(x) {
+    mean(x[[4]][["pred"]])
+}))
 
 # Greening rate (s1_green_rate)
 ##' Using first derivatives of GAM
 ##' Filter to before max EVI
 ##' First rolling period where positive slope of GAM exceeds 50% of max slope
-s1_greenup_mod_list <- lapply(seq(length(gam_list_fil)), function(x) {
-  mod <- gam_list_fil[[x]][[1]]
-  pred <- gam_list_fil[[x]][[2]]
+s1_greenup_mod_list <- lapply(seq(length(gam_list_seas)), function(x) {
+  mod <- gam_list_seas[[x]][[2]]
+  pred <- gam_list_seas[[x]][[3]]
 
   # Get first derivative of gam
   der <- as.data.frame(derivatives(mod, newdata = data.frame(doy = pred_data)))
@@ -224,16 +231,16 @@ s1_greenup_mod_list <- lapply(seq(length(gam_list_fil)), function(x) {
     slope <- unname(mod_green$coefficients[2])
   }
 
-  list(mod = mod_green, slope = slope)
+  list(mod = mod_green, slope = slope, doy_end = doy_green_end)
 })
 
 phen_df_fil$s1_green_rate <- unlist(lapply(s1_greenup_mod_list, `[[`, 2))
 
 # Senescence rate (s1_senes_rate)
 ##' Second to last -5 to last -5 
-s1_senes_mod_list <- lapply(seq(length(gam_list_fil)), function(x) {
-  mod <- gam_list_fil[[x]][[1]]
-  pred <- gam_list_fil[[x]][[2]]
+s1_senes_mod_list <- lapply(seq(length(gam_list_seas)), function(x) {
+  mod <- gam_list_seas[[x]][[2]]
+  pred <- gam_list_seas[[x]][[3]]
 
   # Get first derivative of gam
   der <- as.data.frame(derivatives(mod, newdata = data.frame(doy = pred_data)))
@@ -269,15 +276,16 @@ s1_senes_mod_list <- lapply(seq(length(gam_list_fil)), function(x) {
     slope <- unname(mod_senes$coefficients[2])
   }
   
-  list(mod = mod_senes, slope = slope)
+  list(mod = mod_senes, slope = slope, doy_start = doy_senes_start)
 })
 
 phen_df_fil$s1_senes_rate <- unlist(lapply(s1_senes_mod_list, `[[`, 2))
 
 # Cumulative VI 
 ##'Area under curve between start and end, minus minimum
-phen_df_fil$cum_vi <- unlist(lapply(seq(length(gam_fil)), function(x) {
-  sum(diff(gam_fil[[x]][["doy"]]) * rollmean(gam_fil[[x]][["pred"]], 2))
+phen_df_fil$cum_vi <- unlist(lapply(seq(length(gam_list_seas)), function(x) {
+  sum(diff(gam_list_seas[[x]][[4]][["doy"]]) * 
+    rollmean(gam_list_seas[[x]][[4]][["pred"]], 2))
 }))
 
 phen_all <- plots_clean %>%
@@ -306,46 +314,51 @@ stat_plot <- function(x, raw = FALSE, title = TRUE) {
   p <- ggplot()
 
   if (raw) {
-    evi_raw <- evi_clean %>% 
-      filter(plot_cluster == names(gam_list_fil[x]))
-
-    p <- p + geom_path(data = evi_raw, aes(x = doy, y = evi, group = season),
-      alpha = 0.5) 
+    p <- p + geom_path(data = gam_list_seas[[x]][[1]], 
+      aes(x = doy, y = evi, group = season), alpha = 0.5) 
   }
 
   p <- p + 
-    geom_path(data = gam_list_fil[[x]][[2]], aes(x = doy, y = pred), size = 1.5) + 
-    geom_path(data = gam_fil[[x]], aes(x = doy, y = pred), 
+    geom_path(data = gam_list_seas[[x]][[3]], aes(x = doy, y = pred), size = 1.5) + 
+    geom_path(data = gam_list_seas[[x]][[4]], aes(x = doy, y = pred), 
       colour = pal[1], size = 1.5)
 
   if (class(s1_greenup_mod_list[[x]][[1]]) == "lm") {
-    p <- p + geom_path(data = greenup_pred_df, aes(x = doy, y = pred),
-      size = 2, linetype = "dotdash", colour = pal[2]) 
+    p <- p + 
+      geom_path(data = greenup_pred_df, aes(x = doy, y = pred),
+        size = 2, lty = "41", linetype = "dotted", colour = pal[2]) +
+      geom_vline(xintercept = s1_greenup_mod_list[[x]][[3]],
+        colour = "green")
   }
   if (class(s1_senes_mod_list[[x]][[1]]) == "lm") {
-    p <- p + geom_path(data = senes_pred_df, aes(x = doy, y = pred), 
-      size = 2, linetype = "dotdash", colour = pal[2]) 
+    p <- p + 
+      geom_path(data = senes_pred_df, aes(x = doy, y = pred), 
+        size = 2, lty = "41", linetype = "dotted", colour = pal[2]) +
+      geom_vline(xintercept = s1_senes_mod_list[[x]][[3]],
+        colour = "green")
   }
   p <- p + 
-    geom_vline(xintercept = gam_list_fil[[x]][[2]][which(gam_list_fil[[x]][[2]][["pred"]] == phen_df_fil[x, "max_vi"]), "doy"], colour = pal[4]) + 
-    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_fil[x]), "s1_start"]) %>% pull(), colour = "green") + 
-    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_fil[x]), "s1_end"]) %>% pull(), colour = "blue") + 
+    geom_vline(xintercept = gam_list_seas[[x]][[3]][
+      which(gam_list_seas[[x]][[3]][["pred"]] == phen_df_fil[x, "max_vi"]), "doy"], 
+      colour = pal[4]) + 
+    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_seas[x]), "s1_start"]) %>% pull(), colour = "blue") + 
+    geom_vline(xintercept = st_drop_geometry(phen_all[phen_all$plot_cluster == names(gam_list_seas[x]), "s1_end"]) %>% pull(), colour = "blue") + 
     theme_panel() + 
     labs(x = "Days from 1st Jan.", y = "EVI") 
 
   if (title) { 
-    p <- p + ggtitle(names(gam_list_fil[x]))
+    p <- p + ggtitle(names(gam_list_seas[x]))
   }
 
   p
 }
 
-sam <- sample(seq(length(gam_list_fil)), 50)
+sam <- sample(seq(length(gam_list_seas)), 50)
 ts_stat_plot_list <- lapply(sam, stat_plot) 
 
-pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)
-grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
-dev.off()
+# pdf(file = "img/ts_s1_stats.pdf", width = 20, height = 15)
+# grid.arrange(grobs = ts_stat_plot_list, ncol = 5)
+# dev.off()
 
 # Example plot on its own
 ts_example_plot <- stat_plot(598, raw = TRUE, title = FALSE)
@@ -434,6 +447,7 @@ dev.off()
 
 # Write data 
 saveRDS(phen_all, "dat/plots_phen.rds")
+saveRDS(gam_list_seas, "dat/evi_all.rds")
 
 write(
   c(
