@@ -416,16 +416,16 @@ annot_df <- do.call(rbind, lapply(compare_list, function(x) {
       pval <= 0.001 ~ "p<0.001",
       TRUE ~ paste0("p=", as.character(round(pval, 2))))
   annot <- bquote(R^2~round(r2, 2))
-  data.frame(key_clean = unique(x$key_clean), dof = fstat[3], f, pfmt, r2)
+  data.frame(key_clean = unique(x$key_clean), dof = fstat[3], f, r2, pfmt)
   }))
 
 annot_xtable <- xtable(annot_df, 
   label = "annot_df",
   align = "rrcccc",
-  display = c("s", "s", "f", "f", "s", "f"),
-  digits = c(0, 0, 0, 1, 0, 2),
+  display = c("s", "s", "f", "f", "f", "s"),
+  digits = c(0, 0, 0, 1, 2, 0),
   caption = "Model fit statistics for comparison of MODIS VIPPHEN and MOD13Q1 products across each of our study sites.")
-names(annot_xtable) <- c("Response", "DoF", "F", "Prob.", "R\\textsuperscript{2}")
+names(annot_xtable) <- c("Response", "DoF", "F","R\\textsuperscript{2}","Prob.")
 
 fileConn <- file("out/vipphen_compare.tex")
 writeLines(print(annot_xtable, include.rownames = FALSE, 
