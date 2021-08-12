@@ -1,7 +1,7 @@
 # Compile phenology manuscript
 
 # Define variables
-TEXFILE  = phenology
+TEXFILE  = phen 
 IMGDIR   = ./img
 OUTDIR   = ./out
 DATDIR   = ./dat
@@ -66,11 +66,6 @@ $(OUTDIR)/vars.tex : $(OUTDIR)/data_prep_vars.tex\
 $(IMGDIR)/schematic.pdf : drawio/schematic.drawio
 	@echo Compile drawio images
 	./drawio_export.sh $< $@
-
-# Format some tables
-$(OUTDIR)/all_mod_sel_fmt.tex $(OUTDIR)/lsq_terms_fmt.tex : $(OUTDIR)/all_mod_sel.tex $(OUTDIR)/lsq_terms.tex
-	@echo Format tables
-	./table_fmt.sh $< $@
 
 # Compile main tex file and show errors
 $(TEXFILE).pdf : $(TEXFILE).tex\

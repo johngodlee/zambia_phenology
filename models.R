@@ -81,7 +81,7 @@ modFit <- function(best_ml, null_ml) {
 }
 
 fit_list <- lapply(seq(length(best_ml_list)), function(x) {
-  modFit(max_ml_list[[x]], null_ml_list[[x]])
+  modFit(best_ml_list[[x]], null_ml_list[[x]])
   })
 
 # Nest all model lists in one list
@@ -136,7 +136,7 @@ lapply(seq(length(all_mod_list[[2]])), function(x) {
       diam_quad_mean = if_else(`cluster:diam_quad_mean` == "\\checkmark", "\\checkmark+", diam_quad_mean),
       eff_rich = if_else(`cluster:eff_rich` == "\\checkmark", "\\checkmark+", eff_rich),
       evenness = if_else(`cluster:evenness` == "\\checkmark", "\\checkmark+", evenness)) %>%
-    dplyr::select(-starts_with("cluster:"))
+    dplyr::select(-starts_with("cluster"))
 
   names(out)[3] <- "precip"
 
@@ -145,7 +145,8 @@ lapply(seq(length(all_mod_list[[2]])), function(x) {
       logLik = sprintf("%.0f", logLik),
       AIC = sprintf("%.0f", AIC),
       delta = sprintf("%.0f", delta), 
-      weight = sprintf("%.3f", weight))
+      weight = sprintf("%.3f", weight)) %>%
+    dplyr::select(-delta)
 
   resp <- gsub("\\s~.*", "", attr(all_mod_list[[2]][[x]], "model.calls")[[1]][[2]])[2]
 
@@ -157,12 +158,12 @@ lapply(seq(length(all_mod_list[[2]])), function(x) {
     label = tab_name,
     caption = paste(resp_lookup[names(resp_lookup) %in% resp], 
       "model selection candidate models, with fit statistics. The overall best model is marked by bold text, according to AIC and model parsimony."),
-    align = "cccccccccrrrr",
-    display = c("s", "d", "s", "s", "s", "s", "s", "s", "s", "d", "d", "f", "f"),
-    digits = c(0,0,0,0,0,0,0,0,0,0,0,2,3))
+    align = "ccccccccccc",
+    display = c("s", "d", "s", "s", "s", "s", "s", "s", "d", "d", "f"),
+    digits = c(0,0,0,0,0,0,0,0,0,0,3))
   
-  names(out_tab) <- c("Rank", "Cluster", "Precipitation", "Stem diameter", "Diurnal dT", "Richness", "Evenness", 
-    "DoF", "logLik", "AIC", "$\\Delta{}$", "$W_{i}$")
+  names(out_tab) <- c("Rank", "Precipitation", "Stem diameter", "Diurnal dT", "Richness", "Evenness", 
+    "DoF", "logLik", "AIC", "$W_{i}$")
 
   fileConn <- file(file.path("out", paste0(tab_name, ".tex")))
   writeLines(print(out_tab, include.rownames = FALSE, 
@@ -309,7 +310,7 @@ lsq_terms[resp_blanks, "resp"] <- ""
 lsq_terms_tab <- xtable(lsq_terms, 
   label = "lsq_terms",
   align = "rrcccccc",
-  display = c("s", "s", "s", "E", "E", "d", "f", "f"),
+  display = c("s", "s", "s", "f", "f", "d", "f", "f"),
   digits = c(  0,   0,   0,   1,   2,   0,   2,   2 ),
   caption = "Comparisons of species diversity interaction marginal effects using post-hoc Tukey's tests.")
 names(lsq_terms_tab) <- c("Response", "Clusters", "Estimate", "SE", "DoF", 
