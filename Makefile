@@ -1,7 +1,7 @@
 # Compile phenology manuscript
 
 # Define variables
-TEXFILE  = phen 
+TEXFILE  = phenology
 IMGDIR   = ./img
 OUTDIR   = ./out
 DATDIR   = ./dat
@@ -76,8 +76,8 @@ $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(IMGDIR)/mod_marg.pdf\
 	$(IMGDIR)/schematic.pdf\
 	$(IMGDIR)/phen_dens_clust.pdf\
-	$(OUTDIR)/all_mod_sel_fmt.tex\
-	$(OUTDIR)/lsq_terms_fmt.tex\
+	$(OUTDIR)/all_mod_sel.tex\
+	$(OUTDIR)/lsq_terms.tex\
 	$(OUTDIR)/clust_summ.tex
 	@echo Compile manuscript
 	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make -bibtex $<

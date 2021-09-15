@@ -185,7 +185,7 @@ pergenba <- sum(tree_fil$ba[grepl("indet", tree_fil$species_name_clean) &
 perfamba <- sum(tree_fil$ba[grepl("eae indet$", tree_fil$species_name_clean)])
 perindetba <- sum(tree_fil$ba[grepl("Indet indet", tree_fil$species_name_clean)]) / sum(tree_fil$ba) * 100
 
-# Find quadratic mean of tree diameter per site, and diam CoV
+# Find quadratic mean of tree diameter per site, and diam CV
 diam_summ <- tree_fil %>%
   group_by(plot_cluster) %>%
   summarise(
