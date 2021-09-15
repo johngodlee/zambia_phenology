@@ -202,7 +202,7 @@ phen_bivar_df$pair_label <- paste(
   "y:", resp_lookup[match(phen_bivar_df$y_name, names(resp_lookup))],
   sep = " ")
 
-pdf(file = "img/phen_bivar.pdf", width = 15, height = 10)
+pdf(file = "img/phen_bivar.pdf", width = 15, height = 8)
 ggplot() + 
   geom_point(data = phen_bivar_df, aes(x = pred, y = resp, fill = cluster),
     colour = "black", shape = 21) + 
@@ -210,7 +210,7 @@ ggplot() +
 	stat = "smooth", method = "lm", colour = "black", se = FALSE, size = 1.5) + 
   geom_line(data = phen_bivar_df, aes(x = pred, y = resp, colour = cluster), 
 	stat = "smooth", method = "lm", se = FALSE, size = 1.5) + 
-  facet_wrap(~pair_label, scales = "free") + 
+  facet_wrap(~pair_label, scales = "free", nrow = 3) + 
   scale_fill_manual(name = "Cluster", values = clust_pal) + 
   scale_colour_manual(name = "Cluster", values = clust_pal) + 
   theme_panel() + 
