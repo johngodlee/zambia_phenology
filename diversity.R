@@ -26,7 +26,7 @@ ab_plot_mat <- readRDS("dat/ab_plot_mat.rds")
 
 ba_clust_mat <- readRDS("dat/ba_clust_mat.rds")
 
-evi <- readRDS("dat/evi_all.rds")
+evi <- readRDS("dat/evi_pred_all.rds")
 
 # Filter basal area matrix to plots in `dat`
 ba_clust_mat <- ba_clust_mat[row.names(ba_clust_mat) %in% dat$plot_cluster,]
@@ -90,8 +90,34 @@ ba_gather <- ba_clust_mat %>%
   group_by(plot_cluster, species) %>%
   summarise(ba = sum(ba, na.rm = TRUE)) 
 
-# Split by plot_cluster
-ba_split <- split(ba_gather, ba_gather$plot_cluster)
+# Find percentage of ba which is Detarioideae and other families / subfamilies
+ba_perc <- ba_gather %>% 
+  left_join(., sp_tax[,c("user_supplied_name", "family", "subfamily")], 
+    by = c("species" = "user_supplied_name")) %>%
+  group_by(plot_cluster) %>%
+  mutate(ba_total = sum(ba, na.rm = TRUE)) %>%
+  mutate(ba_perc = ba / ba_total) 
+
+ba_perc_fam <- ba_perc %>%
+  group_by(plot_cluster, family) %>%
+  summarise(ba_perc_fam = sum(ba_perc, na.rm = TRUE)) %>%
+  ungroup() %>%
+  complete(plot_cluster, family, fill = list(ba_perc_fam = 0)) 
+
+ba_perc_subfab_wide <- ba_perc %>%
+  filter(family == "Fabaceae") %>% 
+  filter(!is.na(subfamily)) %>%
+  group_by(plot_cluster, subfamily) %>%
+  summarise(ba_perc_subfab = sum(ba_perc, na.rm = TRUE)) %>%
+  ungroup() %>%
+  complete(plot_cluster, subfamily, fill = list(ba_perc_subfab = 0)) %>%
+  spread(subfamily, ba_perc_subfab) %>%
+  mutate(across(everything(), ~ifelse(is.na(.x), 0, .x)) )
+
+stopifnot(all(!duplicated(ba_perc_subfab_wide$plot_cluster)))
+
+saveRDS(ba_perc_fam, "dat/ba_perc_fam.rds")
+saveRDS(ba_perc_subfab_wide, "dat/ba_perc_subfab.rds")
 
 # For each plot_cluster, dominant species and genera by basal area
 dom_sp <- ba_gather %>% 
@@ -268,6 +294,7 @@ cons_pca_arrows$x_lab <- case_when(
 # Add values to data
 dat_div <- dat %>%
   left_join(., div_df, by = "plot_cluster") %>%  # Diversity stats
+  left_join(., ba_perc_subfab_wide, by = "plot_cluster") %>%  # Dominant species
   left_join(., dom_sp, by = "plot_cluster") %>%  # Dominant species
   left_join(., clust_best, by = "plot_cluster") %>%  # Ward clusters 
   left_join(., cons_pca_tidy, by = "plot_cluster") %>%  # Genus PCA cons-acq 

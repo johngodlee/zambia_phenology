@@ -288,9 +288,6 @@ dat_std <- dat_clean %>%
   st_drop_geometry() %>%
   drop_na()
 
-# Check dataframes have same rows
-stopifnot(nrow(dat_std) == nrow(dat_clean))
-
 # Check for collinearity
 pdf(file = "img/corrplot.pdf", height = 8, width = 10)
 corrPlot(dat_std[,names(pred_lookup)[which(names(pred_lookup) != "cluster")]]) + 
