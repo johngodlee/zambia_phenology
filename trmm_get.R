@@ -102,7 +102,7 @@ extract_df_clean <- extract_df %>%
 
 # Write .csv 
 saveRDS(extract_df_clean, file.path(data_dir, "trmm.rds"))
-  
+
 # Remove .txt files
 #file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
 

@@ -33,7 +33,7 @@ precip_vars <- c(
   "cum_precip_pre", 
   "cum_precip_seas")
 
-other_vars <- "diurnal_temp_range + evenness + eff_rich + diam_quad_mean + evenness:cluster + eff_rich:cluster + diam_quad_mean:cluster + cluster"
+other_vars <- "diurnal_temp_range + evenness + eff_rich + diam_quad_mean + Detarioideae + evenness:cluster + eff_rich:cluster + diam_quad_mean:cluster + cluster"
 
 max_mod_flist <- paste0(names(resp_lookup), " ~ ", precip_vars, " + ", other_vars)
 
@@ -57,12 +57,12 @@ null_ml_list <- lapply(null_mod_flist, function(x) {
 # Which models are "best" while including interaction of cluster and richness?
 
 best_mod_flist <- c(
-  "cum_vi ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + evenness:cluster + diam_quad_mean:cluster + cluster",
-  "s1_length ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + evenness:cluster + cluster",
+  "cum_vi ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + Detarioideae + evenness:cluster + diam_quad_mean:cluster + cluster",
+  "s1_length ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + Detarioideae + evenness:cluster + cluster",
   "s1_green_rate ~ diurnal_temp_range + cluster",
-  "s1_senes_rate ~ cum_precip_end + cluster",
+  "s1_senes_rate ~ cum_precip_end + Detarioideae + cluster",
   "start_lag ~ cum_precip_pre + diurnal_temp_range + eff_rich + evenness + cluster",
-  "end_lag ~ cum_precip_seas + diurnal_temp_range + diam_quad_mean + eff_rich + diam_quad_mean + eff_rich:cluster + cluster")
+  "end_lag ~ cum_precip_seas + diurnal_temp_range + diam_quad_mean + eff_rich + diam_quad_mean + Detarioideae + eff_rich:cluster + cluster")
 
 best_ml_list <- lapply(best_mod_flist, function(x) {
   lm(x, data = dat_std)
@@ -126,11 +126,11 @@ close(fileConn)
 
 # Model selection tables
 # Highlight best model according to AIC
-best_mod <- c(1,2,1,2,1,2)  # best_ml_list
+best_mod <- c(1,2,2,6,1,2)  # best_ml_list
 
-lapply(seq(length(all_mod_list[[2]])), function(x) {
-  out <- as.data.frame(all_mod_list[[2]][[x]])[1:10, c(2:15)] %>%
-    mutate(across(1:9, ~ if_else(is.na(.x), "", "\\checkmark")),
+lapply(seq_along(all_mod_list[[2]]), function(x) {
+  out <- as.data.frame(all_mod_list[[2]][[x]])[1:10, c(2:16)] %>%
+    mutate(across(1:10, ~ if_else(is.na(.x), "", "\\checkmark")),
       rank = seq(nrow(.)), .before = 1) %>%
     mutate(
       diam_quad_mean = if_else(`cluster:diam_quad_mean` == "\\checkmark", "\\checkmark+", diam_quad_mean),
@@ -138,7 +138,7 @@ lapply(seq(length(all_mod_list[[2]])), function(x) {
       evenness = if_else(`cluster:evenness` == "\\checkmark", "\\checkmark+", evenness)) %>%
     dplyr::select(-starts_with("cluster"))
 
-  names(out)[3] <- "precip"
+  names(out)[2] <- "precip"
 
   out <- out %>%
     mutate(rank = sprintf("%.0f", rank),
@@ -158,11 +158,11 @@ lapply(seq(length(all_mod_list[[2]])), function(x) {
     label = tab_name,
     caption = paste(resp_lookup[names(resp_lookup) %in% resp], 
       "model selection candidate models, with fit statistics. The overall best model is marked by bold text, according to AIC and model parsimony."),
-    align = "ccccccccccc",
-    display = c("s", "d", "s", "s", "s", "s", "s", "s", "d", "d", "f"),
-    digits = c(0,0,0,0,0,0,0,0,0,0,3))
+    align = "cccccccccccc",
+    display = c("s", "d", "s", "s", "s", "s", "s", "s", "s", "d", "d", "f"),
+    digits = c(0,0,0,0,0,0,0,0,0,0,0,3))
   
-  names(out_tab) <- c("Rank", "Precipitation", "Stem diameter", "Diurnal dT", "Richness", "Evenness", 
+  names(out_tab) <- c("Rank", "Precipitation", "Detariodeae BA", "Stem diameter", "Diurnal dT", "Richness", "Evenness", 
     "DoF", "logLik", "AIC", "$W_{i}$")
 
   fileConn <- file(file.path("out", paste0(tab_name, ".tex")))
@@ -243,8 +243,9 @@ intf <- function(x) {
 eff_rich_intf <- intf("eff_rich")
 evenness_intf <- intf("evenness")
 diam_quad_mean_intf <- intf("diam_quad_mean")
+Detariodeae_intf <- intf("Detarioideae")
 
-marg_df <- rbind(eff_rich_intf[[2]], evenness_intf[[2]], diam_quad_mean_intf[[2]])
+marg_df <- rbind(eff_rich_intf[[2]], evenness_intf[[2]], diam_quad_mean_intf[[2]], Detariodeae_intf[[2]])
 
 marg_df$resp_clean <- factor(marg_df$resp, 
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
@@ -254,7 +255,7 @@ marg_df$pred_name_clean <- factor(marg_df$pred_name,
       levels = names(pred_lookup), 
       labels = pred_lookup)
 
-pdf(file = "img/mod_marg.pdf", width = 8, height = 10)
+pdf(file = "img/mod_marg.pdf", width = 10, height = 10)
 ggplot() + 
   geom_ribbon(data = marg_df, 
     aes(x = val, ymin = conf_lo, ymax = conf_hi, colour = cluster), 

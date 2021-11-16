@@ -447,7 +447,7 @@ dev.off()
 
 # Write data 
 saveRDS(phen_all, "dat/plots_phen.rds")
-saveRDS(gam_list_seas, "dat/evi_all.rds")
+saveRDS(gam_list_seas, "dat/evi_pred_all.rds")
 
 write(
   c(

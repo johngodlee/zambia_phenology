@@ -1,21 +1,33 @@
 # Define variable name lookup
-pred_lookup <- c("Diversity", "Evenness", "Stem density", 
-  "Wet season precip.", "Pre-green-up precip.", "Pre-senescence precip.",
-    "Vegetation type", "Diurnal dT", "Stem diameter", "Stem diameter variance")
-names(pred_lookup) <- c("eff_rich", "evenness", "n_stems_ge10_ha",
-  "cum_precip_seas", "cum_precip_pre", "cum_precip_end",
-  "cluster", "diurnal_temp_range", "diam_quad_mean", "diam_cov")
+pred_lookup <- c(
+  eff_rich = "Diversity",
+  evenness = "Evenness",
+  n_stems_ge10_ha = "Stem density",
+  cum_precip_seas = "Wet season precip.",
+  cum_precip_pre = "Pre-green-up precip.",
+  cum_precip_end = "Pre-senescence precip.",
+  cluster = "Vegetation type",
+  diurnal_temp_range = "Diurnal dT",
+  diam_quad_mean = "Stem diameter",
+  diam_cov = "Stem diameter variance",
+  Detarioideae = "Detarioid BA")
 
-resp_lookup <- c("Cumulative EVI", "Season length", 
-  "Green-up rate", "Senescence rate",
-  "Green-up lag", "Senescence lag")
-names(resp_lookup) <- c("cum_vi", "s1_length", 
-  "s1_green_rate", "s1_senes_rate", 
-  "start_lag", "end_lag")
+resp_lookup <- c(
+  cum_vi = "Cumulative EVI",
+  s1_length = "Season length",
+  s1_green_rate = "Green-up rate",
+  s1_senes_rate = "Senescence rate",
+  start_lag = "Green-up lag",
+  end_lag = "Senescence lag")
 
 # Define cluster name lookup
-clust_lookup <- c("1", "2", "3", "4", "5", "6")
-names(clust_lookup) <- c("1", "2", "3", "4", "5", "6")
+clust_lookup <- c(
+  `1` = "1",
+  `2` = "2",
+  `3` = "3",
+  `4` = "4",
+  `5` = "5",
+  `6` = "6")
 
 # Theme colours
 pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")

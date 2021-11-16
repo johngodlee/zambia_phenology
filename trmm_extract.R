@@ -57,6 +57,7 @@ trmm_clean <- do.call(rbind, lapply(trmm_seas_list, data.table::rbindlist)) %>%
   filter(!is.na(precip))
 
 saveRDS(trmm_clean, "dat/trmm_ts.rds")
+trmm_clean <- readRDS("dat/trmm_ts.rds")
 
 # Plot raw data
 pdf(file = "img/trmm_ts.pdf", width = 12, height = 8)
@@ -87,6 +88,8 @@ gam_list <- lapply(trmm_split, function(x) {
   out <- list(mod = mod, pred = data.frame(pred, doy = pred_data))
   return(out)
 })
+
+saveRDS(gam_list, "dat/trmm_pred_all.rds")
 
 # Calculate key statistics: 
 trmm_df <- data.frame(plot_cluster = names(gam_list))
