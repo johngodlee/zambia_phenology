@@ -1,6 +1,6 @@
 # Testing effect of species composition and richness on land surface phenology with Zambia ILUAii data 
 # John Godlee (johngodlee@gmail.com)
-# 2020-10-25
+# Last updated: 2023-02-25
 
 # Set working directory
 
@@ -8,19 +8,114 @@
 library(dplyr)
 library(ggplot2)
 library(ggnewscale)
-library(ggeffects)
 library(shades)
 library(xtable)
-library(lme4)
+library(sjPlot)  # devtools::install_github("strengejacke/sjPlot") 
+
+library(ggeffects)
 library(MuMIn)
-library(sjPlot)
 library(car)
 library(emmeans)
 
-source("functions.R")
+source("plot_func.R")
 
 # Import data
-dat_std <- readRDS("dat/plots_anal.rds")
+plots <- readRDS("dat/plots.rds")
+div <- readRDS("dat/div.rds")
+modis <- readRDS("dat/modis.rds")
+
+# Combine dataframes and standardise variables 
+std <- plots %>% 
+  inner_join(., div, by = "plot_cluster") %>% 
+  inner_join(., modis, by = "plot_cluster") %>% 
+  mutate_at(
+    .vars = names(pred_lookup)[which(names(pred_lookup) != "cluster")],
+    .funs = list(std = ~(scale(.) %>% as.vector))) %>%
+  dplyr::select(
+    plot_cluster, 
+    ends_with("_std"), 
+    cluster, 
+    names(resp_lookup), 
+    geometry) %>%
+  rename_at(.vars = vars(ends_with("_std")), 
+    .funs = list(~gsub("_std", "", .))) %>%
+  st_transform(., UTMProj4("35S")) %>%
+  mutate(
+    cluster = as.character(cluster),
+    x = c(unname(st_coordinates(.)[,1])),
+    y = c(unname(st_coordinates(.)[,2]))) %>%
+  st_drop_geometry() %>%
+  drop_na()
+
+# MANOVA to show variation within vegetation clusters vs. outside
+dat_manova <- std %>% 
+  mutate_at(.vars = names(resp_lookup),
+    .funs = list(std = ~(scale(.) %>% as.vector))) %>%
+  dplyr::select(cluster, ends_with("_std"))
+
+phen_manova <- manova(as.matrix(dat_manova[,grepl("_std", names(dat_manova))]) ~ 
+  dat_manova$cluster)
+
+phen_manova_fmt <- paste0("F(", summary(phen_manova)$stats[1], ",", 
+  summary(phen_manova)$stats[2], ")=", round(summary(phen_manova)$stats[5], 2), 
+  ", ", pFormat(summary(phen_manova)$stats[11]))
+
+# Tukey's tests for each phenological metric per cluster
+manova_resp <- names(dat_manova)[grepl("_std", names(dat_manova))]
+
+tukey_out <- do.call(rbind, lapply(manova_resp, function(x) {
+  mod <- aov(dat_manova[[x]] ~ dat_manova$cluster)
+  tukey <- TukeyHSD(mod)
+  tukey_clean <- rownames_to_column(as.data.frame(tukey[[1]]), "comp")
+  tukey_clean$resp <- x
+  return(tukey_clean)
+  }))
+
+# Are all intervals overlapping 0?
+stopifnot(all(tukey_out$upr - tukey_out$lwr >= 0))
+
+tukey_out_clean <- tukey_out %>%
+  mutate(
+    diff = round(diff, 2), 
+    int = paste(round(lwr, 2), round(upr, 2), sep = " - "),
+    `p adj` = pFormat(`p adj`),
+    resp = as.character(factor(.$resp, 
+      levels = paste0(names(resp_lookup[c(1,3,5,2,4,6)]), "_std"), 
+      labels = resp_lookup[c(1,3,5,2,4,6)]))) %>%
+  dplyr::select(
+    resp,
+    comp, 
+    diff,
+    int,
+    `p adj`)
+
+clust_combn <- dim(combn(seq_along(unique(std$cluster)), 2))[2]
+
+resp_blanks <- seq_len(nrow(tukey_out_clean))[-which(seq_len(nrow(tukey_out_clean)) %in% 
+  seq(from = floor(median(seq_along(unique(tukey_out_clean$resp)))), 
+  by = clust_combn, length.out = clust_combn))]
+
+tukey_out_clean[resp_blanks, "resp"] <- ""
+
+tukey_terms_tab <- xtable(tukey_out_clean, 
+  label = "tukey_terms",
+  align = "rrcccc",
+  display = c("s", "s", "s", "s", "s", "s"),
+  digits = c(  0,   0,   0,   0,   0,   0 ),
+  caption = "Post-hoc Tukey's pairwise comparisons among vegetation types for each phenological metric.")
+names(tukey_terms_tab) <- c("Response", "Clusters", "Mean diff.", "Interval", "Prob.")
+  
+fileConn <- file("out/tukey_terms.tex")
+writeLines(print(tukey_terms_tab, include.rownames = FALSE, 
+    table.placement = "H",
+    hline.after = c(-1,0,
+      seq(from = clust_combn, 
+        by = clust_combn, 
+        length.out = length(unique(resp_lookup)))),
+    sanitize.text.function = function(x) {x}), 
+  fileConn)
+close(fileConn)
+
 
 # Mixed models of diversity with clusters 
 
@@ -38,7 +133,7 @@ other_vars <- "diurnal_temp_range + evenness + eff_rich + diam_quad_mean + Detar
 max_mod_flist <- paste0(names(resp_lookup), " ~ ", precip_vars, " + ", other_vars)
 
 max_ml_list <- lapply(max_mod_flist, function(x) {
-  lm(x, data = dat_std, na.action = na.fail)
+  lm(x, data = std, na.action = na.fail)
   })
 
 dredge_list <- lapply(max_ml_list, function(x) {
@@ -46,10 +141,11 @@ dredge_list <- lapply(max_ml_list, function(x) {
   })
 
 # Fit climate only "null" models
-null_mod_flist <- paste0(names(resp_lookup), " ~ ", precip_vars, " + ", "diurnal_temp_range")
+null_mod_flist <- paste0(names(resp_lookup), " ~ ", 
+  precip_vars, " + ", "diurnal_temp_range")
 
 null_ml_list <- lapply(null_mod_flist, function(x) {
-  lm(x, data = dat_std)
+  lm(x, data = std)
   })
 
 # Fit REML version of "best" models
@@ -57,15 +153,15 @@ null_ml_list <- lapply(null_mod_flist, function(x) {
 # Which models are "best" while including interaction of cluster and richness?
 
 best_mod_flist <- c(
-  "cum_vi ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + Detarioideae + evenness:cluster + diam_quad_mean:cluster + cluster",
-  "s1_length ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + Detarioideae + evenness:cluster + cluster",
-  "s1_green_rate ~ diurnal_temp_range + cluster",
-  "s1_senes_rate ~ cum_precip_end + Detarioideae + cluster",
+  "EVI_Area ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + Detarioideae + evenness:cluster + diam_quad_mean:cluster + cluster",
+  "length ~ cum_precip_seas + evenness + eff_rich + diam_quad_mean + Detarioideae + evenness:cluster + cluster",
+  "green_rate ~ diurnal_temp_range + cluster",
+  "senes_rate ~ cum_precip_end + Detarioideae + cluster",
   "start_lag ~ cum_precip_pre + diurnal_temp_range + eff_rich + evenness + cluster",
   "end_lag ~ cum_precip_seas + diurnal_temp_range + diam_quad_mean + eff_rich + diam_quad_mean + Detarioideae + eff_rich:cluster + cluster")
 
 best_ml_list <- lapply(best_mod_flist, function(x) {
-  lm(x, data = dat_std)
+  lm(x, data = std)
   })
 
 # Get model fit statistics 
@@ -94,36 +190,6 @@ names(all_mod_list) <- c("max_ml", "dredge", "null_ml",
 saveRDS(all_mod_list, "dat/all_mod_list.rds")
 
 # Export model statistics table
-mod_stat_df <- as.data.frame(do.call(rbind, lapply(all_mod_list[[5]], function(x) {
-      # If positive, max mod better
-      daic <- x[2,2] - x[1,2]
-      dbic <- x[2,3] - x[1,3]
-      rsq <- x[1,4]
-      dlogl <- x[2,5] - x[1,5]
-
-  unlist(c(daic, dbic, rsq, dlogl))
-}))) 
-
-names(mod_stat_df) <- c("daic", "dbic", "rsq", "dlogl")
-mod_stat_df$resp <- names(resp_lookup)
-mod_stat_df <- mod_stat_df[,c(5,1,3,4)]
-mod_stat_df$resp <- factor(mod_stat_df$resp, levels = names(resp_lookup), 
-  labels = resp_lookup)
-mod_stat_tab <- xtable(mod_stat_df, 
-  label = "mod_stat",
-  align = "rrccc",
-  display = c("s", "s", "f", "f", "f"),
-  digits = c(0, 0, 1, 2, 2),
-  caption = "Model fit statistics for the best model describing each phenological metric.")
-names(mod_stat_tab) <- c("Response", "$\\delta$AIC", "R\\textsuperscript{2}\\textsubscript{adj}", "$\\delta$logLik")
-
-fileConn <- file("out/mod_stat.tex")
-writeLines(print(mod_stat_tab, include.rownames = FALSE, 
-    table.placement = "H",
-    sanitize.text.function = function(x) {x}), 
-  fileConn)
-close(fileConn)
-
 # Model selection tables
 # Highlight best model according to AIC
 best_mod <- c(1,2,2,6,1,2)  # best_ml_list
@@ -225,7 +291,7 @@ intf <- function(x) {
     ifelse(grepl(paste0(x, ":cluster"), .), ., paste0(., " + ", x, ":cluster"))
 
   best_int_ml_list <- lapply(best_int_mod_flist, function(x) {
-    lm(formula(x), data = dat_std)
+    lm(formula(x), data = dat)
     })
 
   marg_df <- do.call(rbind, lapply(seq_along(best_int_ml_list), function(y) {
@@ -288,7 +354,7 @@ lsq_terms_df <- do.call(rbind, lapply(rich_lsq_list, function(x) {
 
 # Make tidy
 lsq_terms <- lsq_terms_df %>%
-  dplyr::select(resp, contrast, estimate, SE, df, t.ratio, p.value) %>%
+  dplyr::select(resp, contrast, estimate, SE, df, z.ratio, p.value) %>%
   mutate(p.value = pFormat(p.value))
 
 lsq_terms$contrast <- unlist(lapply(
@@ -299,7 +365,7 @@ lsq_terms$contrast <- unlist(lapply(
 
 lsq_terms$resp <- as.character(factor(lsq_terms$resp, levels = names(resp_lookup), labels = resp_lookup))
 
-clust_combn <- dim(combn(seq_along(unique(dat_std$cluster)), 2))[2]
+clust_combn <- dim(combn(seq_along(unique(dat$cluster)), 2))[2]
 
 resp_blanks <- seq_len(nrow(lsq_terms))[-which(seq_len(nrow(lsq_terms)) %in% 
   seq(from = floor(median(seq_along(unique(lsq_terms$resp)))), 
@@ -332,8 +398,7 @@ close(fileConn)
 # Write variables
 write(
   c(
-    commandOutput(floor(mod_stat_df$rsq[mod_stat_df$resp == "Green-up lag"] * 100), "greenLagrsq"),
-    commandOutput(floor(mod_stat_df$rsq[mod_stat_df$resp == "Senescence lag"] * 100), "senesLagrsq")
+    commandOutput(phen_manova_fmt, "phenManova")
     ),
   file = "out/models_vars.tex")
 

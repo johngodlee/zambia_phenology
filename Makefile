@@ -15,49 +15,55 @@ all : $(TEXFILE).pdf
 
 # R scripts
 
-# Data prep
-$(DATDIR)/plots.rds $(DATDIR)/sites_loc.rds $(DATDIR)/plot_id_lookup.rds $(OUTDIR)/data_prep_vars.tex $(DATDIR)/ba_clust_mat.rds : data_prep.R functions.R $(DATDIR)/plots_v2.12.csv
-	@echo Data preparation
+# Plot data prep
+$(DATDIR)/plots.rds $(DATDIR)/trees.rds $(OUTDIR)/prep_vars.tex : prep.R $(DATDIR)/plots_v2.12.csv $(DATDIR)/stems_iluaii_v2.12.csv tex_func.R
+	@echo Plot data preparation
 	Rscript $<
-# Feeds into modis_get.R, trmm_get.R, try_get.R, vipphen.R
-# but too big to run in main Makefile
 
-# MODIS extract
-$(DATDIR)/plots_phen.rds $(IMGDIR)/ts_example.pdf $(OUTDIR)/modis_extract_vars.tex : modis_extract.R functions.R $(DATDIR)/plots.rds $(DATDIR)/vipphen.rds $(DATDIR)/evi.rds modis_get.R
-	@echo MODIS data extraction
+# Create abundance matrices
+$(DATDIR)/ba_clust_mat.rds $(DATDIR)/ab_plot_mat.rds : abund.R $(DATDIR)/trees.rds
+	@echo Build abundance matrices
+	Rscript $<
+
+# Land cover classification extract
+$(DATDIR)/zambia_landcover/lcc.tif : lcc.R 
+	@echo Prepare Zambia land cover classification
+	Rscript $<
+
+# BioClim extract
+$(DATDIR)/bioclim.rds $(DATDIR)/bioclim_zambia.rds : bioclim.R $(DATDIR)/plots.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/wc2.1_30s_bio/*.tif
+	@echo BioClim data extraction
 	Rscript $<
 
 # TRMM extract
-$(DATDIR)/plots_trmm.rds $(OUTDIR)/trmm_extract_vars.tex : trmm_extract.R functions.R $(DATDIR)/plots_phen.rds $(DATDIR)/trmm.rds trmm_get.R
+$(DATDIR)/trmm.rds $(OUTDIR)/trmm_vars.tex : trmm.R $(DATDIR)/plots.rds $(DATDIR)/trmm_ts.rds tex_func.R
 	@echo TRMM data extraction
 	Rscript $<
 
-# TRY extract
-$(DATDIR)/plots_try.rds : try_extract.R $(DATDIR)/plots_trmm.rds $(DATDIR)/ba_clust_mat.rds try_get.R $(DATDIR)/traits_sp.rds
-	@echo TRY data extraction
+# MODIS extract
+$(DATDIR)/modis.rds : modis.R $(DATDIR)/plots.rds $(DATDIR)/trmm.rds $(DATDIR)/africa_countries/africa.shp 
+	@echo MODIS data extraction
 	Rscript $<
 
 # Diversity
-$(DATDIR)/plots_div.rds $(OUTDIR)/clust_summ.tex $(OUTDIR)/diversity_vars.tex : diversity.R functions.R $(DATDIR)/plots_try.rds $(DATDIR)/plot_id_lookup.rds $(DATDIR)/ba_clust_mat.rds
-	@echo Diversity data
+$(IMGDIR)/plot_dist_hist.pdf $(IMGDIR)/basal_area_dom_hist.pdf $(IMGDIR)/ward_sil_mean.pdf $(IMGDIR)/ward_sil.pdf $(DATDIR)/taxon.rds $(DATDIR)/div.rds $(OUTDIR)/clust_summ.tex $(DATDIR)/indval.rds $(OUTDIR)/diversity_vars.tex : div.R $(DATDIR)/plots.rds $(DATDIR)/trees.rds $(DATDIR)/ba_clust_mat.rds $(DATDIR)/ab_plot_mat.rds tex_func.R plot_func.R
+	@echo Diversity metrics
 	Rscript $<
 
-# Analysis prep
-$(DATDIR)/plots_anal.rds $(IMGDIR)/phen_dens_clust.pdf $(IMGDIR)/plot_loc.pdf $(OUTDIR)/analysis_vars.tex : analysis.R functions.R $(DATDIR)/plots_div.rds $(DATDIR)/vipphen_stack.rds 
-	@echo Analysis preparation
+# Create visualisations
+$(IMGDIR)/site_map.pdf $(IMGDIR)/site_clim.pdf $(IMGDIR)/site_loc.pdf $(IMGDIR)/phen_bivar.pdf $(OUTDIR)/clust_summ.tex $(IMGDIR)/dens_lag.pdf $(IMGDIR)/phen_dens_clust.pdf : vis.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/modis.rds $(DATDIR)/bioclim.rds $(DATDIR)/indval.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/bioclim_zambia.rds $(DATDIR)/zambia_landcover/lcc.tif plot_func.R
+	@echo Visualisation and descriptive tables
 	Rscript $<
 
 # Models
-$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/mod_stat.tex $(OUTDIR)/all_mod_sel.tex $(OUTDIR)/models_vars.tex : models.R functions.R $(DATDIR)/plots_anal.rds 
+$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/mod_stat.tex $(OUTDIR)/all_mod_sel.tex $(OUTDIR)/models_vars.tex : models.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/phen.rds plot_func.R
 	@echo Models
 	Rscript $<
 
 # Compile all latex variables to one file
-$(OUTDIR)/vars.tex : $(OUTDIR)/data_prep_vars.tex\
-	$(OUTDIR)/modis_extract_vars.tex\
-	$(OUTDIR)/trmm_extract_vars.tex\
+$(OUTDIR)/vars.tex : $(OUTDIR)/prep_vars.tex\
+	$(OUTDIR)/trmm_vars.tex\
 	$(OUTDIR)/diversity_vars.tex\
-	$(OUTDIR)/analysis_vars.tex\
 	$(OUTDIR)/models_vars.tex
 	@echo Compile LaTeX variables
 	cat $^ > $@
@@ -87,12 +93,8 @@ clean :
 	@echo Clean LaTeX files
 	latexmk -C
 
-# Re-create time series and trait values, needs external data
+# Re-create time series and trait values, needs external data, takes a long time
 get : 
 	@echo Extract raw time series data
-	Rscript zambia_clim_get.R
-	Rscript modis_get.R
 	Rscript trmm_get.R
-	Rscript try_get.R
-	Rscript vipphen.R
 
