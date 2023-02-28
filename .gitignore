@@ -3,7 +3,8 @@ dat/**
 img/**
 old/**
 reading/**
-comments/**
+revisions/**
+cover_letter/**
 todo.md
 
 *.tif

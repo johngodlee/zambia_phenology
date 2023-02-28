@@ -14,9 +14,7 @@ library(readr)
 library(tidyr)
 
 # Import plot data
-dat <- readRDS("dat/sites_loc.rds")
-
-dat_sf <- st_as_sf(dat, coords = c("longitude_of_centre", "latitude_of_centre"))
+dat <- readRDS("dat/plots.rds")
 
 # Get HDF file names 
 files <- list.files("/Volumes/TOSHIBA_EXT/trmm", pattern = "*.nc4$", 
@@ -34,7 +32,7 @@ if (!dir.exists(out_dir)) {
 out_names <- gsub("\\.nc4$", ".tif", basename(files))
 
 # Define bounding box to crop to
-zam_bbox <- st_bbox(dat_sf)
+zam_bbox <- st_bbox(dat)
 
 # For each scene, create tif files 
 for (i in seq_along(files)) {
@@ -75,7 +73,7 @@ names(tif_list) <- unlist(lapply(tif_list, function(x) {
 # For each scene, extract plot values 
 lapply(seq(length(tif_list)), function(j) {
   print(sprintf("%s/%s : %s", j, length(tif_list), names(tif_list)[j]))
-  out <- as.character(raster::extract(tif_list[[j]], dat_sf, method = "bilinear"))
+  out <- as.character(raster::extract(tif_list[[j]], dat, method = "bilinear"))
   outfile <- file.path(out_dir, "ext", paste0(names(tif_list)[j], ".txt"))
 
   write_lines(out, outfile)
@@ -101,7 +99,7 @@ extract_df_clean <- extract_df %>%
     precip = as.numeric(precip))
 
 # Write .csv 
-saveRDS(extract_df_clean, file.path(data_dir, "trmm.rds"))
+saveRDS(extract_df_clean, file.path(data_dir, "trmm_ts.rds"))
 
 # Remove .txt files
 #file.remove(list.files(out_dir, "*.txt", full.names = TRUE))
