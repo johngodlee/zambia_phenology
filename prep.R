@@ -148,7 +148,9 @@ write(
   c(
     commandOutput(stem_size, "stemSize"),
     commandOutput(census, "censusDate"),
-    commandOutput(n_total_sites, "nTotalSites")
+    commandOutput(n_total_sites, "nTotalSites"),
+    commandOutput(trees_ha, "treesHa")
+
     ),
   file = "out/prep_vars.tex")
 

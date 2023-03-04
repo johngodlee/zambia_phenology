@@ -89,8 +89,9 @@ ba_perc <- ba_gather %>%
   left_join(., sp_tax[,c("user_supplied_name", "family", "subfamily")], 
     by = c("species" = "user_supplied_name")) %>%
   group_by(plot_cluster) %>%
-  mutate(ba_total = sum(ba, na.rm = TRUE)) %>%
-  mutate(ba_perc = ba / ba_total) 
+  mutate(
+    ba_total = sum(ba, na.rm = TRUE),
+    ba_perc = ba / ba_total) 
 
 ba_perc_fam <- ba_perc %>%
   group_by(plot_cluster, family) %>%
@@ -104,9 +105,13 @@ ba_perc_subfab_wide <- ba_perc %>%
   group_by(plot_cluster, subfamily) %>%
   summarise(ba_perc_subfab = sum(ba_perc, na.rm = TRUE)) %>%
   ungroup() %>%
-  complete(plot_cluster, subfamily, fill = list(ba_perc_subfab = 0)) %>%
+  right_join(., data.frame(plot_cluster = rownames(ba_clust_mat)), by = "plot_cluster") %>% 
+  complete(plot_cluster, subfamily, fill = list(ba_perc_subfab = 0)) %>% 
+  filter(!is.na(subfamily)) %>%
   spread(subfamily, ba_perc_subfab) %>%
   mutate(across(everything(), ~ifelse(is.na(.x), 0, .x)) )
+
+# Add back in plots with no Fabaceae trees
 
 # Check no sites are duplicated
 stopifnot(all(!duplicated(ba_perc_subfab_wide$plot_cluster)))
@@ -244,6 +249,10 @@ indval_extrac_tidy <- do.call(rbind, lapply(indval_extrac, function(x) {
   })
 )
 
+indval_extrac_tidy$cluster <- factor(indval_extrac_tidy$cluster,
+      levels = names(clust_lookup),
+      labels = clust_lookup)
+
 saveRDS(indval_extrac_tidy, "./dat/indval.rds")
 
 # How many of top n dominant species make up percentages of basal area?
@@ -325,10 +334,8 @@ dev.off()
 # Exclude sites where Bray distance of plots is greater than mean of all pairs 
 plot_dist_over <- which(plot_dist_mean < plot_dist_all_mean)
 plot_dist_per <- round(length(plot_dist_over) / length(plot_dist_mean) * 100, 1)
+plot_dist_n <- length(plot_dist_mean) - length(plot_dist_over)
 plots_div_fil <- plots_div[plots_div$plot_cluster %in% names(plot_dist_over),]
-
-# How many sites
-n_sites <- nrow(plots_div_fil)
 
 # Find plot IDs from filtered data 
 plot_id_fil <- plots %>% 
@@ -339,16 +346,19 @@ plot_id_fil <- plots %>%
 # How many trees were identified to species
 ab_plot_mat_fil <- ab_plot_mat[rownames(ab_plot_mat) %in% plot_id_fil,]
 nsp <- sum(ab_plot_mat_fil[,!grepl("indet", names(ab_plot_mat_fil))])
-perspid <- nsp / sum(ab_plot_mat_fil) * 100
+ntrees <- sum(ab_plot_mat_fil)
+perspid <- round(nsp / sum(ab_plot_mat_fil) * 100, 1)
 
 # Export TeX variables
 write(
   c(
     commandOutput(plot_dist_per, "plotDistPer"),
-    commandOutput(n_sites, "nSites"),
+    commandOutput(plot_dist_n, "plotDistN"),
     commandOutput(clust_optim, "nCluster"),
     commandOutput(round(sil_mean_best, 2), "silBest"),
-    commandOutput(perspid, "perSpID")
+    commandOutput(perspid, "perSpID"),
+    commandOutput(ntrees, "nTrees")
+
     ),
   file = "out/diversity_vars.tex")
 
