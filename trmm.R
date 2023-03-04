@@ -32,7 +32,7 @@ trmm <- readRDS("dat/trmm_ts.rds")
 # Are all plots in the time series data?
 stopifnot(all(plots$plot_cluster %in% trmm$plot_cluster))
 
-# Find plots with any NA or negative precipitation values
+# Find plots with any NA values
 trmm_any_bad <- trmm %>% 
   filter(is.na(precip)) %>% 
   pull(plot_cluster) %>% 
@@ -168,8 +168,8 @@ write(
     commandOutput(onset_period_two, "onsetPeriodTwo"),
     commandOutput(onset_precip_two, "onsetPrecipTwo"),
     commandOutput(rainy_def, "rainyDef"),
-    commandOutput(end_period, "endPeriod"),
-    commandOutput(as.english(end_rainy_days), "endRainyDays")
+    commandOutput(end_period, "periodEnd"),
+    commandOutput(end_rainy_days, "rainyDaysEnd")
   ),
   file = "out/trmm_vars.tex")
 

@@ -24,7 +24,7 @@ modis <- readRDS("./dat/modis.rds")
 bioclim <- readRDS("./dat/bioclim.rds")
 indval <- readRDS("./dat/indval.rds")
 
-bioclim_zambia <- rast(readRDS("dat/bioclim_zambia.rds"))
+bioclim_zambia <- readRDS("dat/bioclim_zambia.rds")
 af <- st_read("dat/africa_countries/africa.shp")
 lcc <- rast("dat/zambia_landcover/lcc.tif")
 
@@ -76,6 +76,10 @@ pdf(file = "img/dens_lag.pdf", width = 10, height = 12)
 start_dens_plot + end_dens_plot + plot_layout(ncol = 1)
 dev.off()
 
+dat$cluster <- factor(dat$cluster,
+      levels = names(clust_lookup),
+      labels = clust_lookup)
+
 # Create table of species indicators and climatic data per cluster
 clust_summ <- dat %>% 
   st_drop_geometry() %>% 
@@ -86,30 +90,34 @@ clust_summ <- dat %>%
     n_sites = as.character(n()),
     map_mean = mean(map, na.rm = TRUE),
     map_sd = sd(map, na.rm = TRUE),
-    diurnal_temp_range_mean = mean(diurnal_temp_range, na.rm = TRUE),
-    diurnal_temp_range_sd = sd(diurnal_temp_range, na.rm = TRUE)) %>%
+    mat_mean = mean(mat, na.rm = TRUE),
+    mat_sd = sd(mat, na.rm = TRUE)) %>%
   mutate(
-    cluster = as.character(cluster),
     richness = paste0(sprintf("%.0f", richness_median), "(", sprintf("%.0f", richness_iqr), ")"),
     map = paste0(sprintf("%.0f", map_mean), "(", sprintf("%.1f", map_sd), ")"),
-    diurnal_temp_range = paste0(sprintf("%.0f", diurnal_temp_range_mean), "(", sprintf("%.1f", diurnal_temp_range_sd), ")")) %>%
-  dplyr::select(cluster, n_sites, richness, map, diurnal_temp_range) %>%
+    mat = paste0(sprintf("%.0f", mat_mean), "(", sprintf("%.1f", mat_sd), ")")) %>%
+  dplyr::select(cluster, n_sites, richness, map, mat) %>%
   right_join(indval, by = "cluster", multiple = "all") %>%
   mutate(
     species = paste0("\\textit{", species, "}"),
-    indval = sprintf("%.3f", indval))
+    indval = sprintf("%.3f", indval),
+    cluster = paste("{\\multirow{3}{*}{\\makecell[c]{",
+      gsub("\\s", "\\\\\\\\", cluster),
+      "}}}"))
 
+clust_summ[c(rbind(seq(2, nrow(clust_summ), 3), seq(3, nrow(clust_summ), 3))), 
+  1] <- ""
 clust_summ[c(rbind(seq(1, nrow(clust_summ), 3), seq(3, nrow(clust_summ), 3))), 
-  1:5] <- ""
+  2:5] <- ""
 
-names(clust_summ) <- c("Cluster", "N sites", "Richness", "MAP", "$\\delta$T", "Species", "Indicator value")
+names(clust_summ) <- c("Cluster", "N sites", "Richness", "MAP", "MAT", "Indicator species", "Indicator value")
 
 # Export indval table
 clust_summ_xtable <- xtable(clust_summ,
   label = "clust_summ",
   align = rep("c", 8),
   display = rep("s", 8),
-  caption = "Climatic information and Dufr\\^{e}ne-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm, based on basal area weighted species abundances \\citep{Dufrene1997}. The three species per cluster with the highest indicator values are shown along with other key statistics for each cluster. MAP (Mean Annual Precipitation) and $\\delta$T (Diurnal temperature range) are reported as the mean and 1 standard deviation in parentheses. Species richness is reported as the median and the interquartile range in parentheses.")
+  caption = "Climatic information and Dufr\\^{e}ne-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm, based on basal area weighted species abundances \\citep{Dufrene1997}. The three species per cluster with the highest indicator values are shown along with other key statistics for each cluster. MAP (Mean Annual Precipitation) and MAT (Mean Annual Temperature) are reported as the mean and 1 standard deviation in parentheses. Species richness is reported as the median and the interquartile range in parentheses.")
 
 fileConn <- file("out/clust_summ.tex")
 writeLines(print(clust_summ_xtable, include.rownames = FALSE,
@@ -129,7 +137,7 @@ dat %>%
     names_to = "variable",
     values_to = "value") %>%
   mutate(
-    cluster = as.character(cluster),
+    cluster = cluster,
     variable = factor(variable, 
       levels = names(resp_lookup)[c(1,3,5,2,4,6)],
       labels = resp_lookup[c(1,3,5,2,4,6)])) %>%
@@ -140,41 +148,29 @@ dat %>%
   scale_colour_manual(name = "Cluster", values = clust_pal) + 
   theme_panel()
 dev.off()
-
+    
 # Scatter plots comparing each phenological metric
-phen_bivar_df <- do.call(rbind, lapply(combn(names(resp_lookup), 2, simplify = FALSE),
-  function(x) { 
-    dat_nogeom <- st_drop_geometry(dat)
-    out <- data.frame(dat_nogeom[,x[1]], dat_nogeom[,x[2]], x[1], x[2], 
-      dat_nogeom$cluster)
-    names(out) <- c("pred", "resp", "x_name", "y_name", "cluster")
-    return(out)
-  }))
+bivar_plot_list <- apply(combn(names(resp_lookup), 2), 2, function(x) {
+  ggplot(data = st_drop_geometry(dat), 
+      aes(x = .data[[x[1]]], y = .data[[x[2]]])) + 
+    geom_point(aes(fill = cluster), 
+      colour = "black", shape = 21) + 
+    geom_line(aes(colour = cluster),
+      stat = "smooth", method = "lm", se = FALSE, linewidth = 1.5) + 
+    geom_line(stat = "smooth", method = "lm", se = FALSE, linewidth = 1.5) + 
+    scale_fill_manual(name = "Cluster", values = clust_pal) + 
+    scale_colour_manual(name = "Cluster", values = clust_pal) + 
+    theme_panel() + 
+    labs(
+      x = resp_plot_axes[names(resp_plot_axes) == x[1]], 
+      y = resp_plot_axes[names(resp_plot_axes) == x[2]])
+})
 
-phen_bivar_df$pair_name <- paste(
-  phen_bivar_df$x_name,
-  phen_bivar_df$y_name,
-  sep = "-")
-
-phen_bivar_df$pair_label <- paste(
-  "x:", resp_lookup[match(phen_bivar_df$x_name, names(resp_lookup))],
-  "\n",
-  "y:", resp_lookup[match(phen_bivar_df$y_name, names(resp_lookup))],
-  sep = " ")
-
-pdf(file = "img/phen_bivar.pdf", width = 15, height = 8)
-ggplot() + 
-  geom_point(data = phen_bivar_df, aes(x = pred, y = resp, fill = as.character(cluster)),
-    colour = "black", shape = 21) + 
-  geom_line(data = phen_bivar_df, aes(x = pred, y = resp),
-	stat = "smooth", method = "lm", colour = "black", se = FALSE, linewidth = 1.5) + 
-  geom_line(data = phen_bivar_df, aes(x = pred, y = resp, colour = as.character(cluster)), 
-	stat = "smooth", method = "lm", se = FALSE, linewidth = 1.5) + 
-  facet_wrap(~pair_label, scales = "free", nrow = 3) + 
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
-  scale_colour_manual(name = "Cluster", values = clust_pal) + 
-  theme_panel() + 
-  labs(x = "", y = "")
+pdf(file = "img/phen_bivar.pdf", width = 10, height = 12)
+wrap_plots(bivar_plot_list) +  
+  plot_layout(
+    ncol = 3, 
+    guides = "collect")  & theme(legend.position = 'bottom')
 dev.off()
 
 # Get MODIS HDF file names for 2014 scenes
@@ -191,11 +187,18 @@ greenup_vrt <- vrt(greenup_band_list)[[1]]
 dormancy_vrt <- vrt(dormancy_band_list)[[1]]
 
 # Project Zambia outline to same CRS as VRTs
+zambia <- af[af$sov_a3 == "ZMB",]
 zambia_trans <- st_transform(zambia, st_crs(greenup_vrt))
 
 # Crop VRTs to Zambia
-greenup_crop <- crop(greenup_vrt, zambia_trans)
-dormancy_crop <- crop(dormancy_vrt, zambia_trans)
+# greenup_crop <- terra::crop(greenup_vrt, zambia_trans)
+# dormancy_crop <- terra::crop(dormancy_vrt, st_geometry(zambia_trans))
+
+# saveRDS(greenup_crop, "./dat/MCD12Q2_2014/greenup_crop.rds")
+# saveRDS(dormancy_crop, "./dat/MCD12Q2_2014/dormancy_crop.rds")
+
+greenup_crop <- readRDS("./dat/MCD12Q2_2014/greenup_crop.rds")
+dormancy_crop <- readRDS("./dat/MCD12Q2_2014/dormancy_crop.rds")
 
 # Find season length
 season_length_crop <- dormancy_crop - greenup_crop
@@ -206,8 +209,8 @@ season_length_mask <- mask(season_length_crop, vect(zambia_trans))
 # Mask land cover to woodlands and savannas 
 lcc_fil <- lcc
 lcc_fil[lcc_fil %in% 1:10] <- NA
-lcc_wgs84 <- project(lcc_fil, st_crs(zambia)$proj4string)
-zambia_sv <- vect(zambia)
+lcc_wgs84 <- project(lcc_fil, crs(zambia_trans))
+zambia_sv <- vect(zambia_trans)
 lcc_mask <- mask(crop(lcc_wgs84, zambia_sv), zambia_sv)
 
 # Aggregate to same resolution as phenology
@@ -224,11 +227,12 @@ pdf(file = "img/site_loc.pdf", height = 8, width = 10)
     low = "black" , high = pal[6], limits = c(100, 300), na.value = NA) + 
   new_scale_fill() +
   geom_sf(data = zambia, colour = "black", fill = NA) +
-  geom_sf(data = dat, aes(fill = as.character(cluster)),
+  geom_sf(data = dat, aes(fill = cluster),
     colour = "black", shape = 24, size = 2) +
   theme_panel() + 
   scale_fill_manual(name = "Cluster", values = clust_pal) + 
-  labs(x = "", y = ""))
+  labs(x = "", y = "") + 
+  ggtitle("Geographic space"))
 dev.off()
 
 # Plots in climate space
@@ -244,16 +248,17 @@ pdf(file = "img/site_clim.pdf", width = 10, height = 8)
      trans = "log", breaks = c(1, 10, 100, 1000, 10000)) + 
   new_scale_fill() + 
   geom_point(data = dat, 
-    aes(x = mat, y = map, fill = as.character(cluster)),
+    aes(x = mat, y = map, fill = cluster),
     shape = 24, size = 2) + 
   scale_fill_manual(name = "Cluster", values = clust_pal) + 
   stat_ellipse(data = dat,
-    aes(x = mat, y = map, colour = as.character(cluster)), 
+    aes(x = mat, y = map, colour = cluster), 
     type = "t", level = 0.95, linewidth = 1.2, show.legend = FALSE) + 
   scale_colour_manual(name = "Cluster", values = clust_pal) + 
   theme_panel() + 
   labs(x = expression("MAT" ~ (degree*C)), 
-    y = expression("MAP" ~ (mm ~ y^-1))))
+    y = expression("MAP" ~ (mm ~ y^-1))) + 
+  ggtitle("Climate space"))
 dev.off()
 
 # Plot climate and location together

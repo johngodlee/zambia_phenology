@@ -40,10 +40,19 @@ plot(bioclim_zambia$wc2.1_30s_bio_1, main = "MAT")
 plot(bioclim_zambia$wc2.1_30s_bio_12, main = "MAP")
 dev.off()
 
+# Add 10 km buffer around Zambia
+zambia_buff <- st_buffer(zambia, 10000)
+
+# Convert Zambia with buffer to spatVector
+zambia_buff_sv <- vect(zambia_buff)
+
+# Clip to Zambia
+bioclim_zambia_buff <- mask(crop(bioclim, zambia_buff_sv), zambia_buff_sv)
+
 # Extract BioClim values for each plot
 bioclim_ext <- cbind(
   plots$plot_cluster, 
-  terra::extract(bioclim_zambia, st_coordinates(plots)))
+  terra::extract(bioclim_zambia_buff, st_coordinates(plots)))
 
 names(bioclim_ext) <- c("plot_cluster", "mat", "diurnal_temp_range", "map")
 

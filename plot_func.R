@@ -1,20 +1,19 @@
 # Define variable name lookup
 pred_lookup <- c(
-  eff_rich = "Diversity",
-  evenness = "Evenness",
-  cum_precip_seas = "Wet season precip.",
-  cum_precip_pre = "Pre-green-up precip.",
-  cum_precip_end = "Pre-senescence precip.",
+  eff_rich = "Species diversity",
   cluster = "Vegetation type",
-  diurnal_temp_range = "Diurnal dT",
-  diam_quad_mean = "Stem diameter",
-  Detarioideae = "Detarioid BA")
+  diam_quad_mean = "Mean stem diameter",
+  Detarioideae = "Detarioid relative abundance",
+  diurnal_temp_range = "Diurnal temperature range",
+  cum_precip_seas = "Rainy season precipitation",
+  cum_precip_pre = "Pre-green-up precipitation",
+  cum_precip_end = "Pre-senescence precipitation")
 
 resp_lookup <- c(
   EVI_Area = "Cumulative EVI",
   season_length = "Season length",
-  green_rate = "Green-up rate",
-  senes_rate = "Senescence rate",
+  green_rate = "Green-up length",
+  senes_rate = "Senescence length",
   start_lag = "Green-up lag",
   end_lag = "Senescence lag")
 
@@ -35,7 +34,21 @@ theme_panel <- function() {
     axis.title = element_text(size = 12),
     strip.text = element_text(size = 12),
     legend.text = element_text(size = 12),
+    plot.title = element_text(size = 14)
   )
 }
 
+clust_lookup <- c(
+  "1" = "Uapaca miombo",
+  "2" = "Combretaceae woodland",
+  "3" = "Julbernardia miombo",
+  "4" = "Cryptosepalum miombo")
+
+resp_plot_axes <- c(
+  EVI_Area = "Cumulative EVI",
+  season_length = "Season length (d)",
+  green_rate = "Green-up length (d)",
+  senes_rate = "Senescence length (d)",
+  start_lag = "Green-up lag (d)",
+  end_lag = "Senescence lag (d)")
 

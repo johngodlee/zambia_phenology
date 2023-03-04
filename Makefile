@@ -41,7 +41,7 @@ $(DATDIR)/trmm.rds $(OUTDIR)/trmm_vars.tex : trmm.R $(DATDIR)/plots.rds $(DATDIR
 	Rscript $<
 
 # MODIS extract
-$(DATDIR)/modis.rds : modis.R $(DATDIR)/plots.rds $(DATDIR)/trmm.rds $(DATDIR)/africa_countries/africa.shp 
+$(DATDIR)/modis.rds $(OUTDIR)/modis_vars.tex : modis.R $(DATDIR)/plots.rds $(DATDIR)/trmm.rds $(DATDIR)/africa_countries/africa.shp tex_func.R
 	@echo MODIS data extraction
 	Rscript $<
 
@@ -56,13 +56,14 @@ $(IMGDIR)/site_map.pdf $(IMGDIR)/site_clim.pdf $(IMGDIR)/site_loc.pdf $(IMGDIR)/
 	Rscript $<
 
 # Models
-$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/mod_stat.tex $(OUTDIR)/all_mod_sel.tex $(OUTDIR)/models_vars.tex : models.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/phen.rds plot_func.R
+$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/mod_stat.tex $(OUTDIR)/tukey_terms.tex $(OUTDIR)/models_vars.tex : models.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/modis.rds $(DATDIR)/bioclim.rds plot_func.R tex_func.R
 	@echo Models
 	Rscript $<
 
 # Compile all latex variables to one file
 $(OUTDIR)/vars.tex : $(OUTDIR)/prep_vars.tex\
 	$(OUTDIR)/trmm_vars.tex\
+	$(OUTDIR)/modis_vars.tex\
 	$(OUTDIR)/diversity_vars.tex\
 	$(OUTDIR)/models_vars.tex
 	@echo Compile LaTeX variables
@@ -97,4 +98,5 @@ clean :
 get : 
 	@echo Extract raw time series data
 	Rscript trmm_get.R
+	Rscript modis_get.R
 

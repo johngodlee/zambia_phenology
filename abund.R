@@ -2,8 +2,6 @@
 # John L. Godlee (johngodlee@gmail.com)
 # Last updated: 2023-02-28
 
-# Packages
-
 #' Generate a species by site abundance matrix
 #'
 #' @param x dataframe of individual records
@@ -70,14 +68,14 @@ trees <- readRDS("./dat/trees.rds")
 # Create tree species abundance matrices by plot cluster
 ab_plot_mat <- abMat(trees, 
   site_id = "plot_id", 
-  species_id = "species_name_clean") %>%
-  dplyr::select(-`Indet indet`)
+  species_id = "species_name_clean") 
+ab_plot_mat <- ab_plot_mat[,names(ab_plot_mat) != "Indet indet"]
 
 ba_clust_mat <- abMat(trees, 
   site_id = "plot_cluster", 
   species_id = "species_name_clean", 
-  abundance = "ba") %>%
-  dplyr::select(-`Indet indet`)
+  abundance = "ba")
+ba_clust_mat <- ba_clust_mat[,names(ba_clust_mat) != "Indet indet"]
 
 # Write files
 saveRDS(ba_clust_mat, "dat/ba_clust_mat.rds")
