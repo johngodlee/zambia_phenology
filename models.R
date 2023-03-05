@@ -268,8 +268,8 @@ Detariodeae_intf <- intf("Detarioideae")
 marg_df <- rbind(eff_rich_intf[[2]], diam_quad_mean_intf[[2]], Detariodeae_intf[[2]])
 
 marg_df$resp_clean <- factor(marg_df$resp, 
-      levels = names(resp_plot_axes[c(1,3,5,2,4,6)]), 
-      labels = resp_plot_axes[c(1,3,5,2,4,6)])
+      levels = names(resp_plot_axes[c(1,2,3,4,5,6)]), 
+      labels = resp_plot_axes[c(1,2,3,4,5,6)])
 
 marg_df$pred_name_clean <- factor(marg_df$pred_name, 
       levels = names(pred_lookup), 
