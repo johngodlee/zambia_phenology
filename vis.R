@@ -151,15 +151,40 @@ dev.off()
     
 # Scatter plots comparing each phenological metric
 bivar_plot_list <- apply(combn(names(resp_lookup), 2), 2, function(x) {
+big_sig <- summary(lm(dat[[x[2]]] ~ dat[[x[1]]]))$coefficients[2,4] < 0.05
+big_line <- ifelse(big_sig == TRUE, 1, 2)
+veg1_sig <- summary(lm(dat[[x[2]]][dat$cluster == "Uapaca miombo"] ~ 
+    dat[[x[1]]][dat$cluster == "Uapaca miombo"]))$coefficients[2,4] < 0.05
+veg2_sig <- summary(lm(dat[[x[2]]][dat$cluster == "Combretaceae woodland"] ~ 
+    dat[[x[1]]][dat$cluster == "Combretaceae woodland"]))$coefficients[2,4] < 0.05
+veg3_sig <- summary(lm(dat[[x[2]]][dat$cluster == "Julbernardia miombo"] ~ 
+    dat[[x[1]]][dat$cluster == "Julbernardia miombo"]))$coefficients[2,4] < 0.05
+veg4_sig <- summary(lm(dat[[x[2]]][dat$cluster == "Cryptosepalum miombo"] ~ 
+    dat[[x[1]]][dat$cluster == "Cryptosepalum miombo"]))$coefficients[2,4] < 0.05
+
+dat$veg_line <- 1
+dat$veg_line <- ifelse(veg1_sig == FALSE & dat$cluster == "Uapaca miombo", 
+  2, dat$veg_line)
+dat$veg_line <- ifelse(veg2_sig == FALSE & dat$cluster == "Combretaceae woodland", 
+  2, dat$veg_line)
+dat$veg_line <- ifelse(veg3_sig == FALSE & dat$cluster == "Julbernardia miombo", 
+  2, dat$veg_line)
+dat$veg_line <- ifelse(veg4_sig == FALSE & dat$cluster == "Cryptosepalum miombo", 
+  2, dat$veg_line)
+dat$veg_line <- as.character(dat$veg_line)
+
   ggplot(data = st_drop_geometry(dat), 
       aes(x = .data[[x[1]]], y = .data[[x[2]]])) + 
     geom_point(aes(fill = cluster), 
-      colour = "black", shape = 21) + 
-    geom_line(aes(colour = cluster),
-      stat = "smooth", method = "lm", se = FALSE, linewidth = 1.5) + 
-    geom_line(stat = "smooth", method = "lm", se = FALSE, linewidth = 1.5) + 
+      colour = "black", shape = 21, size = 1) + 
+    geom_line(aes(colour = cluster, linetype = veg_line),
+      stat = "smooth", method = "lm", se = FALSE, linewidth = 1.1) + 
+    geom_line(stat = "smooth", method = "lm", se = FALSE, linewidth = 1.1,
+      linetype = big_line) + 
     scale_fill_manual(name = "Cluster", values = clust_pal) + 
-    scale_colour_manual(name = "Cluster", values = clust_pal) + 
+    scale_colour_manual(name = "Cluster", 
+      values = brightness(clust_pal, 0.6)) +
+    scale_linetype_discrete(guide = "none") + 
     theme_panel() + 
     labs(
       x = resp_plot_axes[names(resp_plot_axes) == x[1]], 
