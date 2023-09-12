@@ -139,6 +139,30 @@ plots_clean <- plots_fil_sf %>%
 # Check all sites in both dataframes
 stopifnot(all(sort(unique(tree_fil$plot_cluster)) == sort(plots_clean$plot_cluster)))
 
+# Find stems in the analysis sites which are less than 10 cm
+big_small_comp <- stems %>% 
+  inner_join(., plot_id_lookup, by = "plot_id") %>%
+  filter(
+    alive == "a",
+    plot_cluster %in% plots_clean$plot_cluster) %>% 
+  group_by(plot_cluster) %>% 
+  summarise(
+    n_small = sum(diam < stem_size, na.rm = TRUE),
+    n_big = sum(diam >= stem_size, na.rm = TRUE),
+    ba_small = sum(pi * (diam[diam < stem_size] / 2)^2, na.rm = TRUE),
+    ba_big = sum(pi * (diam[diam >= stem_size] / 2)^2, na.rm = TRUE)) %>%
+  mutate(
+    n_sum = n_small + n_big,
+    n_diff = n_big - n_small,
+    prop_n_big = n_big / n_sum,
+    ba_sum = ba_small + ba_big,
+    ba_diff = ba_big - ba_small,
+    prop_ba_big = ba_big / ba_sum)
+
+quantile(big_small_comp$prop_ba_big, na.rm = TRUE)
+min_prop_ba_big <- round(min(big_small_comp$prop_ba_big) * 100)
+median_prop_ba_big <- round(median(big_small_comp$prop_ba_big) * 100)
+
 # Write files
 saveRDS(plots_clean, "dat/plots.rds")
 saveRDS(tree_fil, "dat/trees.rds")
@@ -149,8 +173,9 @@ write(
     commandOutput(stem_size, "stemSize"),
     commandOutput(census, "censusDate"),
     commandOutput(n_total_sites, "nTotalSites"),
-    commandOutput(trees_ha, "treesHa")
-
+    commandOutput(trees_ha, "treesHa"),
+    commandOutput(min_prop_ba_big, "minPropBABig"),
+    commandOutput(median_prop_ba_big, "medianPropBABig")
     ),
   file = "out/prep_vars.tex")
 

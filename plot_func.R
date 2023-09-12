@@ -4,17 +4,19 @@ pred_lookup <- c(
   cluster = "Vegetation type",
   diam_quad_mean = "Mean stem diameter",
   Detarioideae = "Detarioid relative abundance",
-  diurnal_temp_range = "Diurnal temperature range",
   cum_precip_seas = "Rainy season precipitation",
   cum_precip_pre = "Pre-green-up precipitation",
-  cum_precip_end = "Pre-senescence precipitation")
+  cum_precip_end = "Pre-senescence precipitation",
+  cum_temp_seas = "Rainy season degree days",
+  cum_temp_pre = "Pre-green-up degree days",
+  cum_temp_end = "Pre-senescence degree days")
 
 resp_lookup <- c(
   EVI_Area = "Cumulative EVI",
   season_length = "Season length",
   green_rate = "Green-up length",
   senes_rate = "Senescence length",
-  start_lag = "Green-up lag",
+  start_lag = "Pre-rain green-up",
   end_lag = "Senescence lag")
 
 # Theme colours
@@ -49,6 +51,6 @@ resp_plot_axes <- c(
   season_length = "Season length (d)",
   green_rate = "Green-up length (d)",
   senes_rate = "Senescence length (d)",
-  start_lag = "Green-up lag (d)",
+  start_lag = "Pre-rain green-up (d)",
   end_lag = "Senescence lag (d)")
 

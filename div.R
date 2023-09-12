@@ -334,8 +334,8 @@ dev.off()
 # Exclude sites where Bray distance of plots is greater than mean of all pairs 
 plot_dist_over <- which(plot_dist_mean < plot_dist_all_mean)
 plot_dist_per <- round(length(plot_dist_over) / length(plot_dist_mean) * 100, 1)
-plot_dist_n <- length(plot_dist_mean) - length(plot_dist_over)
 plots_div_fil <- plots_div[plots_div$plot_cluster %in% names(plot_dist_over),]
+plot_dist_n <- nrow(plots_div_fil)
 
 # Find plot IDs from filtered data 
 plot_id_fil <- plots %>% 
