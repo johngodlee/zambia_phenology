@@ -62,8 +62,8 @@ granExtract <- function(x) {
 files_split <- split(files, granExtract(files))
 
 # Define band names to extract 
-band_names <- c("Greenup", "Maturity", "Senescence", "Dormancy", 
-  "EVI_Area", "QA_Overall")
+band_names <- c("Greenup", "MidGreenup", "Maturity", 
+  "Senescence", "MidGreendown", "Dormancy", "EVI_Area", "QA_Overall")
 
 # For each granule extract band values for each plot
 out <- fastRbind(lapply(seq_along(files_split), function(x) {
@@ -124,5 +124,5 @@ out_spread <- out_clean %>%
     values_from = ext_val)
 
 # Write to file 
-saveRDS(out_spread, "./dat/modis_raw.rds")
+saveRDS(out_spread, "./dat/modis_ts.rds")
 

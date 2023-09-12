@@ -2,8 +2,6 @@
 # John Godlee (johngodlee@gmail.com)
 # 2020-10-13
 
-# Set working directory
-
 # Packages
 library(sf)
 library(dplyr)
@@ -106,6 +104,4 @@ saveRDS(extract_df_clean, file.path(data_dir, "trmm_ts.rds"))
 
 # Remove .tif files
 #file.remove(file.path(out_dir, out_names))
-
-
 

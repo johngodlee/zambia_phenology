@@ -1,4 +1,4 @@
-# Get Zambia climate data
+# Get Zambia long-term climate data
 # John Godlee (johngodlee@gmail.com)
 # 2021-07-22
 
@@ -9,7 +9,6 @@ library(terra)
 # Import bioclim data
 bioclim <- rast(c(
     "./dat/wc2.1_30s_bio/wc2.1_30s_bio_1.tif",
-    "./dat/wc2.1_30s_bio/wc2.1_30s_bio_2.tif",
     "./dat/wc2.1_30s_bio/wc2.1_30s_bio_12.tif"))
 
 # Import plot data
@@ -54,7 +53,8 @@ bioclim_ext <- cbind(
   plots$plot_cluster, 
   terra::extract(bioclim_zambia_buff, st_coordinates(plots)))
 
-names(bioclim_ext) <- c("plot_cluster", "mat", "diurnal_temp_range", "map")
+names(bioclim_ext) <- c("plot_cluster", "mat", "map")
 
 # Save to file
 saveRDS(bioclim_ext, "./dat/bioclim.rds")
+

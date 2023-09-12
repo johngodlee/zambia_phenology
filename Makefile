@@ -1,10 +1,10 @@
 # Compile phenology manuscript
 
 # Define variables
-TEXFILE  = phenology
-IMGDIR   = ./img
-OUTDIR   = ./out
-DATDIR   = ./dat
+TEXFILE = phenology
+IMGDIR = ./img
+OUTDIR = ./out
+DATDIR = ./dat
 
 # Include .pdf here to ensure it is always built
 # latexmk always run, make cannot easily track dependencies in .aux, .bib etc.
@@ -12,8 +12,6 @@ DATDIR   = ./dat
 
 # Depends on final PDF, which starts dependency chain
 all : $(TEXFILE).pdf 
-
-# R scripts
 
 # Plot data prep
 $(DATDIR)/plots.rds $(DATDIR)/trees.rds $(OUTDIR)/prep_vars.tex : prep.R $(DATDIR)/plots_v2.12.csv $(DATDIR)/stems_iluaii_v2.12.csv tex_func.R
@@ -35,14 +33,9 @@ $(DATDIR)/bioclim.rds $(DATDIR)/bioclim_zambia.rds : bioclim.R $(DATDIR)/plots.r
 	@echo BioClim data extraction
 	Rscript $<
 
-# TRMM extract
-$(DATDIR)/trmm.rds $(OUTDIR)/trmm_vars.tex : trmm.R $(DATDIR)/plots.rds $(DATDIR)/trmm_ts.rds tex_func.R
-	@echo TRMM data extraction
-	Rscript $<
-
-# MODIS extract
-$(DATDIR)/modis.rds $(OUTDIR)/modis_vars.tex : modis.R $(DATDIR)/plots.rds $(DATDIR)/trmm.rds $(DATDIR)/africa_countries/africa.shp tex_func.R
-	@echo MODIS data extraction
+# Time series statistics 
+$(DATDIR)/stat_avg.rds $(DATDIR)/stat_all.rds $(OUTDIR)/stat_vars.tex : stat.R $(DATDIR)/plots.rds $(DATDIR)/trmm_ts.rds $(DATDIR)/era_ts.rds $(DATDIR)/modis_ts.rds tex_func.R
+	@echo Time series statistics extraction
 	Rscript $<
 
 # Diversity
@@ -51,21 +44,20 @@ $(IMGDIR)/plot_dist_hist.pdf $(IMGDIR)/basal_area_dom_hist.pdf $(IMGDIR)/ward_si
 	Rscript $<
 
 # Create visualisations
-$(IMGDIR)/site_map.pdf $(IMGDIR)/site_clim.pdf $(IMGDIR)/site_loc.pdf $(IMGDIR)/phen_bivar.pdf $(OUTDIR)/clust_summ.tex $(IMGDIR)/dens_lag.pdf $(IMGDIR)/phen_dens_clust.pdf : vis.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/modis.rds $(DATDIR)/bioclim.rds $(DATDIR)/indval.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/bioclim_zambia.rds $(DATDIR)/zambia_landcover/lcc.tif plot_func.R
+$(IMGDIR)/box_facet_map_mat.pdf $(IMGDIR)/site_map.pdf $(IMGDIR)/phen_bivar.pdf $(OUTDIR)/clust_summ.tex : vis.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds $(DATDIR)/stat_avg.rds $(DATDIR)/bioclim.rds $(DATDIR)/indval.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/bioclim_zambia.rds $(DATDIR)/zambia_landcover/lcc.tif plot_func.R
 	@echo Visualisation and descriptive tables
 	Rscript $<
 
 # Models
-$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/mod_stat.tex $(OUTDIR)/tukey_terms.tex $(OUTDIR)/models_vars.tex : models.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/modis.rds $(DATDIR)/bioclim.rds plot_func.R tex_func.R
+$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/dredge.tex $(OUTDIR)/models_vars.tex : models.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds plot_func.R tex_func.R
 	@echo Models
 	Rscript $<
 
 # Compile all latex variables to one file
 $(OUTDIR)/vars.tex : $(OUTDIR)/prep_vars.tex\
-	$(OUTDIR)/trmm_vars.tex\
-	$(OUTDIR)/modis_vars.tex\
 	$(OUTDIR)/diversity_vars.tex\
-	$(OUTDIR)/models_vars.tex
+	$(OUTDIR)/models_vars.tex\
+	$(OUTDIR)/stat_vars.tex
 	@echo Compile LaTeX variables
 	cat $^ > $@
 
@@ -77,15 +69,16 @@ $(IMGDIR)/schematic.pdf : drawio/schematic.drawio
 # Compile main tex file and show errors
 $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(OUTDIR)/vars.tex\
-	$(IMGDIR)/plot_loc.pdf\
-	$(IMGDIR)/ts_example.pdf\
+	$(OUTDIR)/clust_summ.tex\
+	$(OUTDIR)/dredge_adj.tex\
+	$(IMGDIR)/schematic_rev_2023-09-01.pdf\
+	$(IMGDIR)/site_map.pdf\
+	$(IMGDIR)/box_facet_map_mat.pdf\
+	$(IMGDIR)/ts_illus.pdf\
 	$(IMGDIR)/mod_slopes.pdf\
 	$(IMGDIR)/mod_marg.pdf\
-	$(IMGDIR)/schematic.pdf\
-	$(IMGDIR)/phen_dens_clust.pdf\
-	$(OUTDIR)/all_mod_sel.tex\
-	$(OUTDIR)/lsq_terms.tex\
-	$(OUTDIR)/clust_summ.tex
+	$(IMGDIR)/boxplots.pdf\
+	$(IMGDIR)/phen_bivar.pdf
 	@echo Compile manuscript
 	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make -bibtex $<
 
@@ -99,4 +92,4 @@ get :
 	@echo Extract raw time series data
 	Rscript trmm_get.R
 	Rscript modis_get.R
-
+	Rscript era_get.R
