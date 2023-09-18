@@ -17,6 +17,7 @@ library(ggeffects)
 library(emmeans)
 library(patchwork)
 library(lme4)
+library(sjPlot)
 
 source("plot_func.R")
 source("tex_func.R")
@@ -400,7 +401,7 @@ int_f <- function(e, p) {
   }))
 }
 
-rich_pred_vec <- seq(1, 20, 1)
+rich_pred_vec <- seq(0, 20, 1)
 rich_pred_min <- min(rich_pred_vec)
 rich_pred_max <- max(rich_pred_vec)
 eff_rich_intf <- int_f("eff_rich", rich_pred_vec)

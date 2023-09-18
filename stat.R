@@ -33,18 +33,18 @@ modis <- readRDS("./dat/modis_ts.rds")
 # Create a value for Dormancy which is just MidGreendown + 30 days
 dorm_pad <- 30
 ##' Because mean diff between greenup and mid-greenup is 35.42+/-6.379 days
-modis_raw$Dormancy2 <- modis_raw$MidGreendown + dorm_pad
+modis$Dormancy2 <- modis$MidGreendown + dorm_pad
 
 # Calculate length of greening and senescence period
-modis_raw$green_rate <- modis_raw$Maturity - modis_raw$Greenup
-modis_raw$senes_rate <- modis_raw$Dormancy2 - modis_raw$Senescence
-modis_raw$season_length <- modis_raw$Dormancy2 - modis_raw$Greenup
+modis$green_rate <- modis$Maturity - modis$Greenup
+modis$senes_rate <- modis$Dormancy2 - modis$Senescence
+modis$season_length <- modis$Dormancy2 - modis$Greenup
 
 # Check all scenese of "best" quality
-stopifnot(all(modis_raw$QA_Overall == 0 | is.na(modis_raw$QA_Overall)))
+stopifnot(all(modis$QA_Overall == 0 | is.na(modis$QA_Overall)))
 
 # Get range of data
-modis_range <- range(modis_raw$year)
+modis_range <- range(modis$year)
 
 # Are all plots in the time series data?
 stopifnot(all(plots$plot_cluster %in% trmm$plot_cluster))
@@ -161,9 +161,9 @@ stat_all <- fastRbind(mclapply(trmm_list, function(x) {
     trmm_end95 <- y[y$cum_rain > 0.95 * sum(y$precip), "date"][1]
 
     # Get MODIS data
-    modis_fil <- modis_raw[
-      modis_raw$plot_cluster == unique(y_rainy$plot_cluster) & 
-        modis_raw$year == max(y_rainy$year),]
+    modis_fil <- modis[
+      modis$plot_cluster == unique(y_rainy$plot_cluster) & 
+        modis$year == max(y_rainy$year),]
 
     # Format greenup and senescence dates as Dates
     greenup_date <- as.Date(modis_fil$Greenup, origin = "1970-01-01")

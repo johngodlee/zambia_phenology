@@ -23,14 +23,14 @@ $(DATDIR)/ba_clust_mat.rds $(DATDIR)/ab_plot_mat.rds : abund.R $(DATDIR)/trees.r
 	@echo Build abundance matrices
 	Rscript $<
 
-# Land cover classification extract
-$(DATDIR)/zambia_landcover/lcc.tif : lcc.R 
-	@echo Prepare Zambia land cover classification
-	Rscript $<
-
 # BioClim extract
 $(DATDIR)/bioclim.rds $(DATDIR)/bioclim_zambia.rds : bioclim.R $(DATDIR)/plots.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/wc2.1_30s_bio/*.tif
 	@echo BioClim data extraction
+	Rscript $<
+
+# Season length raster extract
+$(DATDIR)/slen_zambia.tif : slen.R $(DATDIR)/africa_countries/africa.shp $(DATDIR)/modis_zambia.tif $(DATDIR)/zambia_landcover/lcc.tif
+	@echo Zambia season length raster extraction
 	Rscript $<
 
 # Time series statistics 
@@ -44,7 +44,7 @@ $(IMGDIR)/plot_dist_hist.pdf $(IMGDIR)/basal_area_dom_hist.pdf $(IMGDIR)/ward_si
 	Rscript $<
 
 # Create visualisations
-$(IMGDIR)/box_facet_map_mat.pdf $(IMGDIR)/site_map.pdf $(IMGDIR)/phen_bivar.pdf $(OUTDIR)/clust_summ.tex : vis.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds $(DATDIR)/stat_avg.rds $(DATDIR)/bioclim.rds $(DATDIR)/indval.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/bioclim_zambia.rds $(DATDIR)/zambia_landcover/lcc.tif plot_func.R
+$(IMGDIR)/box_facet_map_mat.pdf $(IMGDIR)/site_map.pdf $(IMGDIR)/phen_bivar.pdf : vis.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds $(DATDIR)/stat_avg.rds $(DATDIR)/bioclim.rds $(DATDIR)/indval.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/bioclim_zambia.rds plot_func.R $(DATDIR)/trmm_ts.rds $(DATDIR)/bioclim_zambia.rds $(DATDIR)/slen_zambia.tif
 	@echo Visualisation and descriptive tables
 	Rscript $<
 
@@ -66,6 +66,11 @@ $(IMGDIR)/schematic.pdf : drawio/schematic.drawio
 	@echo Compile drawio images
 	./drawio_export.sh $< $@
 
+# Convert time series illustation from .svg to .png
+$(IMGDIR)/ts_illus.png : drawio/ts_illus.svg
+	@echo Compile svg images
+	rsvg-convert -w 2586 -h 1709 $@ $<
+
 # Compile main tex file and show errors
 $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(OUTDIR)/vars.tex\
@@ -74,7 +79,7 @@ $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(IMGDIR)/schematic_rev_2023-09-01.pdf\
 	$(IMGDIR)/site_map.pdf\
 	$(IMGDIR)/box_facet_map_mat.pdf\
-	$(IMGDIR)/ts_illus.pdf\
+	$(IMGDIR)/ts_illus.png\
 	$(IMGDIR)/mod_slopes.pdf\
 	$(IMGDIR)/mod_marg.pdf\
 	$(IMGDIR)/boxplots.pdf\

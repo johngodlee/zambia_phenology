@@ -1,4 +1,4 @@
-# Define variable name lookup
+# Define predictor name lookup
 pred_lookup <- c(
   eff_rich = "Species diversity",
   cluster = "Vegetation type",
@@ -11,6 +11,7 @@ pred_lookup <- c(
   cum_temp_pre = "Pre-green-up degree days",
   cum_temp_end = "Pre-senescence degree days")
 
+# Define response name lookup
 resp_lookup <- c(
   EVI_Area = "Cumulative EVI",
   season_length = "Season length",
@@ -18,6 +19,17 @@ resp_lookup <- c(
   senes_rate = "Senescence length",
   start_lag = "Pre-rain green-up",
   end_lag = "Senescence lag")
+
+# Define response plot axis names
+resp_plot_axes <- resp_lookup
+resp_plot_axes[2:6] <- paste(resp_plot_axes[2:6], "(d)")
+
+# Cluster name lookup
+clust_lookup <- c(
+  "1" = "Uapaca miombo",
+  "2" = "Combretaceae woodland",
+  "3" = "Julbernardia miombo",
+  "4" = "Cryptosepalum miombo")
 
 # Theme colours
 pal <- c("lightseagreen", "#DE6400", "dodgerblue", "tomato", "grey", "#E0E0E0")
@@ -39,18 +51,4 @@ theme_panel <- function() {
     plot.title = element_text(size = 14)
   )
 }
-
-clust_lookup <- c(
-  "1" = "Uapaca miombo",
-  "2" = "Combretaceae woodland",
-  "3" = "Julbernardia miombo",
-  "4" = "Cryptosepalum miombo")
-
-resp_plot_axes <- c(
-  EVI_Area = "Cumulative EVI",
-  season_length = "Season length (d)",
-  green_rate = "Green-up length (d)",
-  senes_rate = "Senescence length (d)",
-  start_lag = "Pre-rain green-up (d)",
-  end_lag = "Senescence lag (d)")
 

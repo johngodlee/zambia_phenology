@@ -14,6 +14,8 @@ library(shades)
 library(tidyterra)
 library(ggnewscale)
 library(scico)
+library(RcppRoll)
+library(lubridate)
 
 source("./plot_func.R")
 
@@ -24,10 +26,11 @@ stat_avg <- readRDS("./dat/stat_avg.rds")
 stat_all <- readRDS("./dat/stat_all.rds")
 bioclim <- readRDS("./dat/bioclim.rds")
 indval <- readRDS("./dat/indval.rds")
+trmm <- readRDS("./dat/trmm_ts.rds")
 
-bioclim_zambia <- readRDS("dat/bioclim_zambia.rds")
-af <- st_read("dat/africa_countries/africa.shp")
-lcc <- rast("dat/zambia_landcover/lcc.tif")
+bioclim_zambia <- readRDS("./dat/bioclim_zambia.rds")
+af <- st_read("./dat/africa_countries/africa.shp")
+slen_zambia <- rast("./dat/slen_zambia.tif")
 
 # Combine plots dataframes
 dat <- plots %>% 
@@ -221,61 +224,15 @@ wrap_plots(bivar_plot_list) +
     guides = "collect")  & theme(legend.position = 'bottom')
 dev.off()
 
-# Get MODIS HDF file names for 2014 scenes
-modis_files <- list.files("./dat/MCD12Q2_2014", pattern = "*.hdf", full.names = TRUE)
-
-# Get band names for Greenup and Dormancy
-greenup_band_list <- paste0("HDF4_EOS:EOS_GRID:", modis_files, 
-  ":MCD12Q2:", "Greenup")
-dormancy_band_list <- paste0("HDF4_EOS:EOS_GRID:", modis_files, 
-  ":MCD12Q2:", "MidGreendown")
-
-# Create VRTs for Greenup and Dormancy
-greenup_vrt <- vrt(greenup_band_list)[[1]]
-dormancy_vrt <- vrt(dormancy_band_list)[[1]]
-
-# Project Zambia outline to same CRS as VRTs
+# Extract Zambia from Africa countries
 zambia <- af[af$sov_a3 == "ZMB",]
-zambia_trans <- st_transform(zambia, st_crs(dormancy_vrt))
-
-# Crop VRTs to Zambia
-greenup_crop <- terra::crop(greenup_vrt, st_geometry(zambia_trans))
-dormancy_crop <- terra::crop(dormancy_vrt, st_geometry(zambia_trans))
-
-# Pad midgreendown to get dormancy
-dorm_pad <- 30
-values(dormancy_crop) <- values(dormancy_crop) + dorm_pad
-
-saveRDS(greenup_crop, "./dat/MCD12Q2_2014/greenup_crop.rds")
-saveRDS(dormancy_crop, "./dat/MCD12Q2_2014/dormancy_crop.rds")
-greenup_crop <- readRDS("./dat/MCD12Q2_2014/greenup_crop.rds")
-dormancy_crop <- readRDS("./dat/MCD12Q2_2014/dormancy_crop.rds")
-
-# Find season length
-season_length_crop <- dormancy_crop - greenup_crop
-
-# Mask season length layer by Zambia outline
-season_length_mask <- mask(season_length_crop, vect(zambia_trans))
-
-# Mask land cover to woodlands and savannas 
-lcc_fil <- lcc
-lcc_fil[lcc_fil %in% 1:10] <- NA
-lcc_wgs84 <- project(lcc_fil, crs(zambia_trans))
-zambia_sv <- vect(zambia_trans)
-lcc_mask <- mask(crop(lcc_wgs84, zambia_sv), zambia_sv)
-
-# Aggregate to same resolution as phenology
-lcc_agg <- resample(lcc_mask, season_length_mask)
-
-# Mask phenology by land cover
-season_length_mask_veg <- mask(season_length_mask, lcc_agg, inverse = TRUE)
 
 # Plot location map
 pdf(file = "img/site_loc.pdf", height = 8, width = 10)
 (site_loc <- ggplot() +
-  geom_spatraster(data = season_length_mask_veg) + 
+  geom_spatraster(data = slen_zambia) + 
   scale_fill_gradient(name = "Season length\n(days)", 
-    low = "black" , high = pal[6], limits = c(100, 300), na.value = NA) + 
+    low = "#1c1c1c" , high = pal[6], limits = c(100, 330), na.value = NA) + 
   new_scale_fill() +
   geom_sf(data = zambia, colour = "black", fill = NA) +
   geom_sf(data = dat, aes(fill = cluster),
@@ -379,3 +336,28 @@ lag_table
 nrow(stat_all)
 
 lag_table / nrow(stat_all) * 100
+
+# Compare methods of estimating start and end of rainy season
+trmm_start_comp <- ggplot(stat_all, aes(x = trmm_start, y = trmm_start10)) + 
+  geom_point(alpha = 0.2) +
+  geom_abline(colour = "red", linetype = 2) +
+  theme_bw() + 
+  ggtitle("Rainy season start") + 
+  labs(
+    x = ">10+20 days >20+20 mm rain",
+    y = "10th percentile")
+# My method produces much early starts of season
+
+trmm_end_comp <- ggplot(stat_all, aes(x = trmm_end, y = trmm_end95)) + 
+  geom_point(alpha = 0.2) +
+  geom_abline(colour = "red", linetype = 2) + 
+  theme_bw() + 
+  ggtitle("Rainy season end") + 
+  labs(
+    x = "<4 days 0.5 mm rain over 30 days",
+    y = "95th percentile")
+# My method always produces an end of season later than the q95 method
+
+pdf(file = "./img/trmm_start_end_comp.pdf", width = 10, height = 5)
+wrap_plots(trmm_start_comp, trmm_end_comp)
+dev.off()
