@@ -4,10 +4,10 @@ pred_lookup <- c(
   cluster = "Vegetation type",
   diam_quad_mean = "Mean stem diameter",
   Detarioideae = "Detarioid relative abundance",
-  cum_precip_seas = "Rainy season precipitation",
+  cum_precip_seas = "Growing season precipitation",
   cum_precip_pre = "Pre-green-up precipitation",
   cum_precip_end = "Pre-senescence precipitation",
-  cum_temp_seas = "Rainy season degree days",
+  cum_temp_seas = "Growing season degree days",
   cum_temp_pre = "Pre-green-up degree days",
   cum_temp_end = "Pre-senescence degree days")
 
