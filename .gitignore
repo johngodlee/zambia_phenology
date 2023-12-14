@@ -1,10 +1,12 @@
 .DS_Store
 dat/**
 img/**
+out/**
 old/**
 reading/**
 revisions/**
 cover_letter/**
+ssnm_2024/**
 todo.md
 
 *.tif
