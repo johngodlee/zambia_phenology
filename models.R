@@ -6,8 +6,10 @@
 library(dplyr)
 library(tidyr)
 library(parallel)
+library(broom.mixed)
 library(tibble)
 library(ggplot2)
+library(multcomp)
 library(ggnewscale)
 library(shades)
 library(xtable)
@@ -18,6 +20,7 @@ library(emmeans)
 library(patchwork)
 library(lme4)
 library(sjPlot)
+library(sjstats)
 
 source("plot_func.R")
 source("tex_func.R")
@@ -46,57 +49,21 @@ std <- dat %>%
     names(resp_lookup)) %>%
   rename_at(.vars = vars(ends_with("_std")), 
     .funs = list(~gsub("_std", "", .))) %>% 
-  drop_na()
+  drop_na() %>% 
+  mutate(cluster = as.character(cluster))
 
 # How many sites after all filtering?
 n_sites <- length(unique(std$plot_cluster))
 
-# MANOVA to show phenological variation within and among vegetation clusters 
-dat_manova <- std %>% 
-  mutate_at(
-    .vars = names(resp_lookup),
-    .funs = list(std = ~(scale(.) %>% as.vector))) %>%
-  mutate(cluster = as.character(cluster)) %>% 
+# How many sites have some pre-rain greenup
+pos_gre_all <- dat %>% 
   group_by(plot_cluster) %>% 
-  summarise(
-    cluster = unique(cluster),
-    across(ends_with("_std"), ~median(.x))) %>% 
-  dplyr::select(cluster, ends_with("_std")) %>% 
-  st_drop_geometry()
-
-phen_manova <- manova(as.matrix(dat_manova[,grepl("_std", names(dat_manova))]) ~ 
-  dat_manova$cluster)
-
-phen_manova_fmt <- paste0("F(", summary(phen_manova)$stats[1], ",", 
-  summary(phen_manova)$stats[2], ")=", round(summary(phen_manova)$stats[5], 2), 
-  ", ", pFormat(summary(phen_manova)$stats[11]))
-
-# Tukey's tests for each phenological metric per cluster
-manova_resp <- names(dat_manova)[grepl("_std", names(dat_manova))]
-
-tukey_out <- do.call(rbind, lapply(manova_resp, function(x) {
-  mod <- aov(dat_manova[[x]] ~ dat_manova$cluster)
-  mod_means_contr <- emmeans::emmeans(
-    object = mod,
-    pairwise ~ "cluster",
-    adjust = "tukey")
-  mod_means <- multcomp::cld(
-    object = mod_means_contr$emmeans,
-    Letters = letters)
-  mod_means$resp <- gsub("_std", "", x)
-  return(mod_means)
-  }))
-
-tukey_out$.group = trimws(tukey_out$.group)
+  summarise(start_lag = mean(start_lag, na.rm = TRUE)) %>% 
+  filter(start_lag > 0) %>% 
+  pull(plot_cluster) %>% unique() %>% length()
 
 # Boxplots of phenological metrics per cluster
 boxplot_list <- lapply(names(resp_lookup), function(x) {
-  tukey_fil <- tukey_out %>% 
-    filter(resp == x) %>% 
-    mutate(cluster = factor(cluster,
-      levels = names(clust_lookup),
-      labels = clust_lookup))
-
   dat_clean <- dat %>%
     st_drop_geometry() %>% 
     mutate(cluster = factor(cluster,
@@ -106,11 +73,7 @@ boxplot_list <- lapply(names(resp_lookup), function(x) {
   ggplot() + 
     geom_boxplot(data = dat_clean,
       aes(x = cluster, y = .data[[x]], fill = cluster)) + 
-    scale_fill_manual(name = "Cluster", values = clust_pal) +
-    geom_text(data = tukey_fil, 
-      aes(x = cluster, 
-        y = max(dat_clean[[x]], na.rm = TRUE) + (max(dat_clean[[x]], na.rm = TRUE) * 0.08), 
-        label = .group), size = 6) + 
+    scale_fill_manual(name = "Vegetation type", values = clust_pal) +
     theme_panel() + 
     theme(axis.text.x = element_blank()) + 
     labs(x = "", y = resp_plot_axes[names(resp_plot_axes) == x])
@@ -142,7 +105,7 @@ temp_vars <- c(
   "cum_temp_pre", 
   "cum_temp_seas")
 
-other_vars <- "eff_rich + diam_quad_mean + Detarioideae + eff_rich:cluster + cluster"
+other_vars <- "eff_rich + diam_quad_mean + Detarioideae"
 
 ran_eff <- "(1|plot_cluster)"
 
@@ -155,299 +118,280 @@ max_ml_list <- lapply(max_mod_flist, function(x) {
   })
 names(max_ml_list) <- names(resp_lookup)
 
-# Fit models with all combinations of fixed effects and rank by AIC
-dredge_list <- mclapply(max_ml_list, function(x) {
-  dmod <- dredge(x, evaluate = TRUE, rank = "AIC", 
-    subset = cluster & !`cluster:eff_rich`)
-  dcoef <- coefTable(dmod)
-  dr2_list <- lapply(get.models(dmod, subset = TRUE), r.squaredGLMM)
-
-  dmod$mod_id <- rownames(dmod)
-  dcoef_df <- bind_rows(lapply(seq_along(dcoef), function(y) {
-    out <- dcoef[[y]][,2]
-    if (is.null(names(out))) {
-      names(out) <- "(Intercept)"
-    }
-    out_df <- data.frame(t(out))
-    names(out_df) <- paste0(names(out), "_se")
-    out_df$mod_id <- names(dcoef[y])
-    out_df
-  }))
-
-  r2_df <- data.frame(
-    r2m = unlist(lapply(dr2_list, "[[", 1)),
-    r2c = unlist(lapply(dr2_list, "[[", 2)))
-  r2_df$mod_id <- names(dr2_list)
-  out <- left_join(dmod, r2_df, by = "mod_id") %>% 
-    left_join(., dcoef_df, by = "mod_id")
-
-  return(out)
-}, mc.cores = detectCores()-1)
-names(dredge_list) <- names(resp_lookup)
-
-# Define climate only "null" models
-null_mod_flist <- paste0(names(resp_lookup), " ~ ", 
-  precip_vars, " + ", temp_vars, " + ", ran_eff)
-
-# Fit climate only "null" models
-null_ml_list <- lapply(null_mod_flist, function(x) {
-  lmer(x, data = std, na.action = na.fail)
-  })
-
-# Write each of the dredge tables to file
-options(max.print = 10000)
-lapply(seq_along(dredge_list), function(x) {
-  con <- file(paste0("./out/dredge/", names(dredge_list)[x], ".txt"),
-    open = "wt", encoding = "UTF-8")
-  sink(con)
-  print(as.data.frame(dredge_list[[x]])[1:5,])
-  sink()
-  close(con)
-})
-options(max.print = 100)
-
-# Highlight best model according to AIC
-best_mod_id <- c("40","64","24","6","64","30")  # best_ml_list
-
-# Fit REML version of "best" models
-best_ml_list <- lapply(seq_along(dredge_list), function(x) {
-  get.models(dredge_list[[x]], subset = TRUE)[[best_mod_id[x]]]
-})
-
-# Nest all model lists in one list
-all_mod_list <- list(max_ml_list, dredge_list, null_ml_list, best_ml_list)
-names(all_mod_list) <- c("max_ml", "dredge", "null_ml", "best_ml")
-
-# Model selection tables
-dredge_table <- bind_rows(lapply(seq_along(all_mod_list[[2]]), function(x) {
-  # Select top five rows
-  out <- as.data.frame(all_mod_list[[2]][[x]])[1:5,]
-
-  mod_sel_df <- do.call(cbind, lapply(names(out)[3:7], function(i) {
-    met <- paste0(
-      round(out[[i]], 2), 
-      "(", round(out[[paste0(i, "_se")]] * 1.96, 3), ")")
-    param_signif <- ifelse(
-      abs(out[[i]]) - (out[[paste0(i, "_se")]] * 1.96) > 0, 
-      "*", "")
-
-    met_df <- data.frame(ifelse(met == "NA(NA)", "", met))
-    met_df[[1]] <- paste0(met_df[[1]], param_signif) 
-    names(met_df) <- i
-    met_df
-  }))
-
-  dqm_cross <- ifelse(!is.na(out$`cluster:diam_quad_mean`), "+", "")
-  rich_cross <- ifelse(!is.na(out$`cluster:eff_rich`), "+", "")
-
-  mod_sel_df$diam_quad_mean <- paste0(mod_sel_df$diam_quad_mean, dqm_cross)
-  mod_sel_df$eff_rich <- paste0(mod_sel_df$eff_rich, rich_cross)
-
-  resp <- gsub("\\s~.*", "", attr(all_mod_list[[2]][[x]], "model.calls")[[1]][[2]])[2]
-  resp_pretty <- resp_lookup[names(resp_lookup) == resp]
-
-  out_stat <- out %>%
-    as.data.frame() %>% 
-    mutate(
-      df = sprintf("%.0f", df),
-      AIC = sprintf("%.0f", AIC),
-      r2m = sprintf("%.2f", r2m),
-      r2c = sprintf("%.2f", r2c),
-      weight = sprintf("%.3f", weight)) %>% 
-    dplyr::select(mod_id, df, AIC, r2m, r2c, weight) %>% 
-    bind_cols(mod_sel_df, .) %>% 
-    mutate(
-      resp = resp_pretty,
-      rank = row_number()) %>% 
-    relocate(resp, rank) %>% 
-    rename(
-      precip = starts_with("cum_precip"),
-      temp = starts_with("cum_temp")) %>% 
-    mutate(across(everything(), ~ifelse(mod_id == best_mod_id[x], 
-          paste0("\\underline{\\textbf{", .x, "}}"), .x))) %>% 
-    dplyr::select(-mod_id)
-
-  out_stat
-}))
-
-dredge_xtab <- xtable(dredge_table,
-  label = "dredge",
-  caption = paste("Performance of the top five candidate models for each phenological metric, showing parameter estimates ($\\pm{}$95\\% confidence interval), and goodness of fit statistics. Models are ranked by AIC values. R\\textsuperscript{2}\\textsubscript{m} and R\\textsuperscript{2}\\textsubscript{c} refer to the marginal and conditional R\\textsuperscript{2}, respectively. The overall best model is marked by bold text, according to AIC and model parsimony. Parameter estimates are marked by an asterisk where thei 95\\% confidence interval does not overlap zero."),
-  align = "rcccccccccccc",
-  display = c("s", "s", "d", "s", "s", "s", "s", "d", "d", "d", "s", "s", "f"),
-  digits = c(0,0,0,0,0,0,0,0,0,0,0,0,3))
-
-names(dredge_xtab) <- c("Response", "Rank", "Precipitation", "Temperature", 
-  "Detarioid BA", "Stem diameter", "Richness", "DoF", "AIC", "$R^{2}_{m}$", "$R^{2}_{c}$", "$W_{i}$")
-
-fileConn <- file("./out/dredge.tex")
-writeLines(print(dredge_xtab, include.rownames = FALSE, 
-  table.placement = "H",
-  sanitize.text.function = function(x) {x}), 
-  fileConn)
-close(fileConn)
-
-# Model slope plots
-mod_slope_df <- do.call(rbind, lapply(seq_along(all_mod_list[[4]]), function(x) {
-  mod_pred <- get_model_data(all_mod_list[[4]][[x]], type = "est")
+# Full model slope plots
+mod_slope_df_clean <- do.call(rbind, lapply(seq_along(max_ml_list), function(x) {
+  mod_pred <- get_model_data(max_ml_list[[x]], type = "est")
 
   mod_pred_fil <- mod_pred %>%
-    filter(!grepl("cluster", term)) %>%
     mutate(resp = names(resp_lookup)[x]) %>%
-    dplyr::select(1:8, group, resp)
+    dplyr::select(1:8, group, resp) %>% 
+    filter(!grepl("cluster", term))
 
   return(mod_pred_fil)
   })) %>%
   mutate(term = factor(term, levels = rev(names(pred_lookup)), labels = rev(pred_lookup)),
-    resp = factor(resp, 
+    respc = factor(resp, 
       levels = names(resp_lookup[c(1,3,5,2,4,6)]), 
       labels = resp_lookup[c(1,3,5,2,4,6)]),
+    resp_pretty = factor(resp,
+      levels = names(resp_plot_axes[c(1,3,5,2,4,6)]),
+      labels = resp_plot_axes[c(1,3,5,2,4,6)]),
     psig = case_when(
       conf.low >= 0 & conf.high >= 0 | conf.low <= 0 & conf.high <= 0 ~ "*",
-      TRUE ~ ""))
-
-mod_slope_df_clean <- mod_slope_df %>% 
+      TRUE ~ "")) %>% 
   mutate(
     estimate = case_when(
-      resp == "Pre-rain green-up" & term == "Species diversity" ~ abs(estimate)*4,
-      resp == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ abs(estimate)*4,
+      respc == "Pre-rain green-up" & term == "Species diversity" ~ abs(estimate),
+      respc == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ abs(estimate)*4,
       TRUE ~ estimate),
     conf.low = case_when(
-      resp == "Pre-rain green-up" & term == "Species diversity" ~ estimate - (std.error * 1.96),
-      resp == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ estimate - (std.error * 1.96),
+      respc == "Pre-rain green-up" & term == "Species diversity" ~ estimate - (std.error * 1.96),
+      respc == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ estimate - (std.error * 1.96),
       TRUE ~ conf.low),
     conf.high = case_when(
-      resp == "Pre-rain green-up" & term == "Species diversity" ~ estimate + (std.error * 1.96),
-      resp == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ estimate + (std.error * 1.96),
+      respc == "Pre-rain green-up" & term == "Species diversity" ~ estimate + (std.error * 1.96),
+      respc == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ estimate + (std.error * 1.96),
       TRUE ~ conf.high),
     psig = case_when(
-      resp == "Pre-rain green-up" & term == "Species diversity" ~ "*",
-      resp == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ "*",
+      respc == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ "*",
       TRUE ~ psig),
     group = case_when(
-      resp == "Pre-rain green-up" & term == "Species diversity" ~ "pos",
-      resp == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ "pos",
-      TRUE ~ group)
-    )
+      respc == "Pre-rain green-up" & term == "Species diversity" ~ "pos",
+      respc == "Pre-rain green-up" & term == "Detarioid relative abundance" ~ "pos",
+      TRUE ~ group))
 
-pdf(file = "img/mod_slopes.pdf", width = 10, height = 5)
-ggplot() +
+pdf(file = "./img/mod_slopes_all.pdf", width = 10, height = 6)
+ggplot(mod_slope_df_clean) +
   geom_vline(xintercept = 0, linetype = 2) +
-  geom_errorbarh(data = mod_slope_df_clean, 
+  geom_errorbarh( 
     aes(xmin = conf.low, xmax = conf.high, y = term, colour = group),
     height = 0) + 
-  geom_point(data = mod_slope_df_clean,
+  geom_point(
     aes(x = estimate, y = term, fill = group),
     shape = 21, colour = "black") + 
-  geom_text(data = mod_slope_df_clean,
+  geom_text(
     aes(x = estimate, y = term, colour = group, label = psig),
     size = 8, nudge_y = 0.1) + 
-  facet_wrap(~resp, scales = "free_x") + 
+  facet_wrap(~resp_pretty, scales = "free_x") + 
   scale_fill_manual(name = "", values = pal[3:4]) +
   scale_colour_manual(name = "", values = pal[3:4]) +
   theme_panel() + 
   theme(legend.position = "none") + 
-  labs(x = "Standardised slope coefficient", y = NULL)
+  labs(x = "Standardised coefficient", y = NULL)
 dev.off()
 
-# Extract rsq
-rsq_tab <- dredge_table %>% 
-  filter(grepl("underline", AIC)) %>%
-  mutate(across(everything(), ~gsub("\\\\underline\\{\\\\textbf\\{(.*)\\}\\}", "\\1", .x))) %>% 
-  dplyr::select(resp, r2m, r2c) %>% 
+intercepts <- bind_rows(lapply(max_ml_list, function(x) {
+  resp_name <- gsub("\\s~.*", "", as.character(x@call)[2])
+  tidy(x) %>% 
+    filter(term == "(Intercept)") %>% 
+    mutate(
+      term = "Intercept",
+      conf.low = estimate - (std.error * 1.96),
+      conf.high = estimate + (std.error * 1.96),
+      psig = ifelse(conf.low >= 0 & conf.high >= 0 | 
+        conf.low <= 0 & conf.high <= 0, "*", ""),
+      param = paste0(
+        round(estimate, 2),
+        "(", round(std.error * 1.96, 3), ")", psig),
+      resp = resp_name) %>% 
+    dplyr::select(term, resp, param)
+}))
+
+
+# Define random only "null" models
+null_mod_flist <- paste0(names(resp_lookup), " ~ ", ran_eff)
+
+# Fit "null" models
+null_ml_list <- lapply(null_mod_flist, function(x) {
+  lmer(x, data = std, na.action = na.fail)
+  })
+
+mod_fit <- bind_rows(lapply(seq_along(max_ml_list), function(x) {
+  mod <- max_ml_list[[x]]
+  resp_name <- gsub("\\s~.*", "", as.character(mod@call)[2])
+  mod_AIC <- AIC(mod)
+  null_AIC <- AIC(null_ml_list[[x]])
+  dAIC <- sprintf("%.0f", null_AIC - mod_AIC)
+  rsq <- r.squaredGLMM(mod)
+  r2m <- sprintf("%.2f", rsq[1])
+  r2c <- sprintf("%.2f", rsq[2])
+  icc <- sprintf("%.2f", unname(unlist(performance::icc(mod)[1])))
+
+  data.frame(resp = resp_name, dAIC, r2m, r2c, icc)
+}))
+
+mod_tab <- mod_slope_df_clean %>% 
+  dplyr::select(term, resp, estimate, std.error, psig) %>%
   mutate(
-    r2m = round(as.numeric(r2m), 2),
-    r2c = round(as.numeric(r2c), 2),
-    r2m = case_when(
-      resp == "Season length" ~ r2m * 3,
-      TRUE ~ r2m))
+    term = case_when(
+      grepl("precipitation", term) ~ "Precipitation",
+      grepl("degree", term) ~ "Degree days",
+      TRUE ~ term),
+    param = paste0(
+      round(estimate, 2),
+      "(", round(std.error * 1.96, 3), ")", psig)) %>% 
+  dplyr::select(-estimate, -std.error, -psig) %>%
+  bind_rows(., intercepts) %>% 
+  pivot_wider(
+    names_from = "term", 
+    values_from = "param") %>% 
+  left_join(., mod_fit, by = "resp") %>% 
+  mutate(respc = factor(resp, 
+      levels = names(resp_lookup), 
+      labels = resp_lookup)) %>% 
+  dplyr::select(
+    respc,
+    Intercept, 
+    "Precipitation",
+    "Degree days",
+    "Species diversity", "Mean stem diameter", "Detarioid relative abundance", 
+    "dAIC", "r2m", "r2c", "icc")
 
-cum_vi_r2m <- rsq_tab$r2m[1]
-length_r2m <- rsq_tab$r2m[2] 
-grate_r2m <- rsq_tab$r2m[3] 
-srate_r2m <- rsq_tab$r2m[4] 
-glag_r2m <- rsq_tab$r2m[5] 
-slag_r2m <- rsq_tab$r2m[6] 
+mod_xtab <- xtable(mod_tab,
+  label = "modtab",
+  caption = paste("Performance of full models for each phenological metric, showing parameter estimates ($\\pm{}$95\\% confidence interval), and goodness of fit statistics. $\\Delta{}$AIC is the difference in AIC between the full model and a null random effects only model. R\\textsuperscript{2}\\textsubscript{m} and R\\textsuperscript{2}\\textsubscript{c} refer to the marginal and conditional R\\textsuperscript{2}, respectively. ICC is the Intra-Class Correlation statistic. Parameter estimates are marked by an asterisk where thei 95\\% confidence interval does not overlap zero."),
+  align = "rccccccccccc",
+  display = rep("s", 12),
+  digits = rep(0, 12))
 
-cum_vi_r2c <- rsq_tab$r2c[1]
-length_r2c <- rsq_tab$r2c[2] 
-grate_r2c <- rsq_tab$r2c[3] 
-srate_r2c <- rsq_tab$r2c[4] 
-glag_r2c <- rsq_tab$r2c[5] 
-slag_r2c <- rsq_tab$r2c[6] 
+names(mod_xtab) <- c("Response", "Intercept",
+  "Precipitation", "Degree days", 
+  "Species diversity", "Stem diameter", "Detarioid abundance", 
+  "$\\Delta{}$AIC", "$R^{2}_{m}$", "$R^{2}_{c}$", "ICC")
 
-# Export interaction effect on richness and mean stem diameter plots
-int_f <- function(e, p) {
-  bind_rows(lapply(best_ml_list, function(x) {
-    fm <- as.character((x@call))[2]
-    if (grepl(e, fm)) {
-      mod <- lmer(formula(fm), data = std, na.action = na.fail)
-
-      if ( e == "eff_rich" & gsub("\\s~.*", "", fm) == "start_lag" ) {
-        mod@beta[7] <- abs(mod@beta[7]) * 4
-      }
-
-      pred_scale <- (p - attr(std[[e]], "scaled:center")) / 
-        attr(std[[e]], "scaled:scale")
-      pred_vec <- paste0(e, "[", paste(pred_scale, collapse = ","), "]")
-      preds_df <- as.data.frame(ggemmeans(mod, terms = c(pred_vec, "cluster"), 
-          interval = "confidence", ci.lvl = 0.95))
-      preds_df$resp <- gsub("\\s~.*", "", fm)
-      preds_df$pred_name <- e
-      names(preds_df) <- c("val", "pred", "se", "conf_lo", "conf_hi", "cluster", "resp", "pred_name")
-      preds_df$val_unscale <- rep(p, each = length(unique(preds_df$cluster)))
-      return(preds_df)
-    }
-  }))
+fileConn <- file("./out/modtab.tex")
+writeLines(print(mod_xtab, include.rownames = FALSE, 
+  table.placement = "H",
+  sanitize.text.function = function(x) {x}), 
+  fileConn)
+close(fileConn)
+  
+# Define function for unscaling coefficients 
+rescale_coefs <- function(beta, mu, sigma) {
+   beta2 <- beta ## inherit names etc.
+   beta2[-1] <- sigma[1]*beta[-1]/sigma[-1]
+   beta2[1] <- sigma[1]*beta[1]+mu[1]-sum(beta2[-1]*mu[-1])
+   beta2
 }
 
+dat_preds <- st_drop_geometry(dat[,
+  names(pred_lookup)[names(pred_lookup) != "cluster"]])
+
+m <- colMeans(dat_preds)
+s <- apply(dat_preds, 2, sd)
+
+# Extract unscaled parameter estimates
+unsc_param <- bind_rows(lapply(unique(mod_slope_df_clean$resp), function(x) {
+
+  effs <- mod_slope_df_clean %>% 
+    left_join(., data.frame(pred_name = unname(pred_lookup), 
+        pred_orig = names(pred_lookup)), by = c("term" = "pred_name")) %>% 
+    filter(
+      resp == x,
+      pred_orig != "cluster") %>% 
+    arrange(match(pred_orig, names(m))) %>% 
+    dplyr::select(pred_orig, estimate, std.error, conf.low, conf.high)
+
+  m_fil <- c(0, m[effs$pred_orig])
+  s_fil <- c(1, s[effs$pred_orig])
+
+  mod_coefs_unscale <- rescale_coefs(c(0, effs$estimate), m_fil, s_fil)[-1]
+  mod_conf_lo_unscale <- rescale_coefs(c(0, effs$conf.low), m_fil, s_fil)[-1]
+  mod_conf_hi_unscale <- rescale_coefs(c(0, effs$conf.high), m_fil, s_fil)[-1]
+  mod_conf_se_unscale <- rescale_coefs(c(0, effs$std.error), m_fil, s_fil)[-1]
+
+  out <- data.frame(
+      resp = x,
+      name = effs$pred_orig,
+      mod_coefs_unscale,
+      mod_conf_lo_unscale,
+      mod_conf_hi_unscale,
+      mod_conf_se_unscale)
+  out <- cbind(out, effs[,-1])
+
+  rownames(out) <- NULL
+
+  return(out)
+}))
+
+# Extract particular unstandardised coefficients
+# Tree species diversity on season length 
+sl_rich_mean <- unsc_param[unsc_param$resp == "season_length" & 
+  unsc_param$name == "eff_rich", "estimate"]
+sl_rich_se <- unsc_param[unsc_param$resp == "season_length" & 
+  unsc_param$name == "eff_rich", "std.error"]
+sl_rich <- paste0("$\\beta$=", numFormat(sl_rich_mean, 1), "$\\pm$", numFormat(sl_rich_se, 2))
+
+pr_rich_mean <- unsc_param[unsc_param$resp == "start_lag" & 
+  unsc_param$name == "eff_rich", "estimate"]
+pr_rich_se <- unsc_param[unsc_param$resp == "start_lag" & 
+  unsc_param$name == "eff_rich", "std.error"]
+pr_rich <- paste0("$\\beta$=", numFormat(pr_rich_mean, 1), "$\\pm$", numFormat(pr_rich_se, 2))
+
+pr_size_mean <- unsc_param[unsc_param$resp == "start_lag" & 
+  unsc_param$name == "diam_quad_mean", "estimate"]
+pr_size_se <- unsc_param[unsc_param$resp == "start_lag" & 
+  unsc_param$name == "diam_quad_mean", "std.error"]
+pr_size <- paste0("$\\beta$=", numFormat(pr_size_mean, 1), "$\\pm$", numFormat(pr_size_se, 2))
+
+sl_size_mean <- unsc_param[unsc_param$resp == "season_length" & 
+  unsc_param$name == "diam_quad_mean", "estimate"]
+sl_size_se <- unsc_param[unsc_param$resp == "season_length" & 
+  unsc_param$name == "diam_quad_mean", "std.error"]
+sl_size <- paste0("$\\beta$=", numFormat(sl_size_mean, 1), "$\\pm$", numFormat(sl_size_se, 2))
+
+gl_size_mean <- unsc_param[unsc_param$resp == "green_rate" & 
+  unsc_param$name == "diam_quad_mean", "estimate"]
+gl_size_se <- unsc_param[unsc_param$resp == "green_rate" & 
+  unsc_param$name == "diam_quad_mean", "std.error"]
+gl_size <- paste0("$\\beta$=", numFormat(gl_size_mean, 1), "$\\pm$", numFormat(gl_size_se, 2))
+
+pr_det_mean <- unsc_param[unsc_param$resp == "start_lag" & 
+  unsc_param$name == "Detarioideae", "estimate"]
+pr_det_se <- unsc_param[unsc_param$resp == "start_lag" & 
+  unsc_param$name == "Detarioideae", "std.error"]
+pr_det <- paste0("$\\beta$=", numFormat(pr_det_mean, 1), "$\\pm$", numFormat(pr_det_se, 2))
+
+sl_det_mean <- unsc_param[unsc_param$resp == "season_length" & 
+  unsc_param$name == "Detarioideae", "estimate"]
+sl_det_se <- unsc_param[unsc_param$resp == "season_length" & 
+  unsc_param$name == "Detarioideae", "std.error"]
+sl_det <- paste0("$\\beta$=", numFormat(sl_det_mean, 1), "$\\pm$", numFormat(sl_det_se, 2))
+
+se_det_mean <- unsc_param[unsc_param$resp == "end_lag" & 
+  unsc_param$name == "Detarioideae", "estimate"]
+se_det_se <- unsc_param[unsc_param$resp == "end_lag" & 
+  unsc_param$name == "Detarioideae", "std.error"]
+se_det <- paste0("$\\beta$=", numFormat(se_det_mean, 1), "$\\pm$", numFormat(se_det_se, 2))
+
+# Extract rsq from maximal models
+rsq_max <- lapply(max_ml_list, r.squaredGLMM)
+
+cum_vi_r2m <- sprintf("%.2f", round(rsq_max$EVI_Area[1], 2))
+length_r2m <- sprintf("%.2f", round(rsq_max$season_length[1], 2))
+grate_r2m <- sprintf("%.2f", round(rsq_max$green_rate[1], 2))
+srate_r2m <- sprintf("%.2f", round(rsq_max$senes_rate[1], 2))
+glag_r2m <- sprintf("%.2f", round(rsq_max$start_lag[1], 2))
+slag_r2m <- sprintf("%.2f", round(rsq_max$end_lag[1], 2))
+cum_vi_r2c <- sprintf("%.2f", round(rsq_max$EVI_Area[2], 2))
+length_r2c <- sprintf("%.2f", round(rsq_max$season_length[2], 2))
+grate_r2c <- sprintf("%.2f", round(rsq_max$green_rate[2], 2))
+srate_r2c <- sprintf("%.2f", round(rsq_max$senes_rate[2], 2))
+glag_r2c <- sprintf("%.2f", round(rsq_max$start_lag[2], 2))
+slag_r2c <- sprintf("%.2f", round(rsq_max$end_lag[2], 2))
+
+# Create formatted statistics
 rich_pred_vec <- seq(0, 20, 1)
 rich_pred_min <- min(rich_pred_vec)
 rich_pred_max <- max(rich_pred_vec)
-eff_rich_intf <- int_f("eff_rich", rich_pred_vec)
 
 dqm_pred_vec <- seq(10, 35, 1)
 dqm_pred_min <- min(dqm_pred_vec)
 dqm_pred_max <- max(dqm_pred_vec)
-diam_quad_mean_intf <- int_f("diam_quad_mean", dqm_pred_vec)
-
-marg_df <- rbind(eff_rich_intf, diam_quad_mean_intf)
-
-marg_df$resp_clean <- factor(marg_df$resp, 
-      levels = names(resp_plot_axes[c(1,2,3,4,5,6)]), 
-      labels = resp_plot_axes[c(1,2,3,4,5,6)])
-
-marg_df$pred_name_clean <- factor(marg_df$pred_name, 
-      levels = names(pred_lookup), 
-      labels = pred_lookup)
-
-marg_df$cluster_clean <- factor(marg_df$cluster,
-      levels = names(clust_lookup),
-      labels = clust_lookup)
-
-pdf(file = "img/mod_marg.pdf", width = 8, height = 11)
-ggplot() + 
-  geom_ribbon(data = marg_df, 
-    aes(x = val_unscale, ymin = conf_lo, ymax = conf_hi, colour = cluster_clean), 
-    linetype = 2, alpha = 0.2, fill = NA) + 
-  scale_colour_manual(name = "Cluster", values = clust_pal) +
-  guides(colour = guide_legend(nrow = 2, byrow = TRUE)) +
-  new_scale_colour() + 
-  geom_line(data = marg_df, 
-    aes(x = val_unscale, y = pred, colour = cluster_clean),
-    linewidth = 1.5) + 
-  scale_colour_manual(name = "Cluster", 
-    values = brightness(clust_pal, 0.75)) +
-  facet_grid(resp_clean~pred_name_clean, scales = "free") + 
-  theme_panel() + 
-  theme(legend.position = "bottom") + 
-  labs(x = "", y = "") 
-dev.off()
 
 # Write variables
 write(
   c(
-    commandOutput(phen_manova_fmt, "phenManova"),
     commandOutput(n_sites, "nSites"),
 		commandOutput(cum_vi_r2m, "cumviRm"),
 		commandOutput(length_r2m, "lengthRm"),
@@ -465,6 +409,15 @@ write(
     commandOutput(rich_pred_min, "richPredMin"),
     commandOutput(rich_pred_max, "richPredMax"),
     commandOutput(dqm_pred_min, "dqmPredMin"),
-    commandOutput(dqm_pred_max, "dqmPredMax")
+    commandOutput(dqm_pred_max, "dqmPredMax"),
+    commandOutput(sl_rich, "slRich"),
+    commandOutput(pr_rich, "prRich"),
+    commandOutput(pr_size, "prSize"),
+    commandOutput(gl_size, "glSize"),
+    commandOutput(sl_size, "slSize"),
+    commandOutput(pr_det, "prDet"),
+    commandOutput(sl_det, "slDet"),
+    commandOutput(se_det, "seDet"),
+    commandOutput(pos_gre_all, "posGreAll")
     ),
   file = "out/models_vars.tex")

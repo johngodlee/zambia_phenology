@@ -39,17 +39,17 @@ $(DATDIR)/stat_avg.rds $(DATDIR)/stat_all.rds $(OUTDIR)/stat_vars.tex : stat.R $
 	Rscript $<
 
 # Diversity
-$(IMGDIR)/plot_dist_hist.pdf $(IMGDIR)/basal_area_dom_hist.pdf $(IMGDIR)/ward_sil_mean.pdf $(IMGDIR)/ward_sil.pdf $(DATDIR)/taxon.rds $(DATDIR)/div.rds $(OUTDIR)/clust_summ.tex $(DATDIR)/indval.rds $(OUTDIR)/diversity_vars.tex : div.R $(DATDIR)/plots.rds $(DATDIR)/trees.rds $(DATDIR)/ba_clust_mat.rds $(DATDIR)/ab_plot_mat.rds tex_func.R plot_func.R
+$(DATDIR)/div.rds $(OUTDIR)/clust_summ.tex $(DATDIR)/indval.rds $(OUTDIR)/diversity_vars.tex : div.R $(DATDIR)/plots.rds $(DATDIR)/trees.rds $(DATDIR)/ba_clust_mat.rds $(DATDIR)/ab_plot_mat.rds tex_func.R plot_func.R
 	@echo Diversity metrics
 	Rscript $<
 
 # Create visualisations
-$(IMGDIR)/box_facet_map_mat.pdf $(IMGDIR)/site_map.pdf $(IMGDIR)/phen_bivar.pdf : vis.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds $(DATDIR)/stat_avg.rds $(DATDIR)/bioclim.rds $(DATDIR)/indval.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/bioclim_zambia.rds plot_func.R $(DATDIR)/trmm_ts.rds $(DATDIR)/bioclim_zambia.rds $(DATDIR)/slen_zambia.tif
+$(IMGDIR)/box_facet_map_mat.pdf $(IMGDIR)/site_map.pdf $(IMGDIR)/phen_bivar.pdf $(OUTDIR)/vis_vars.tex : vis.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds $(DATDIR)/stat_avg.rds $(DATDIR)/bioclim.rds $(DATDIR)/indval.rds $(DATDIR)/africa_countries/africa.shp $(DATDIR)/bioclim_zambia.rds plot_func.R $(DATDIR)/trmm_ts.rds $(DATDIR)/bioclim_zambia.rds $(DATDIR)/slen_zambia.tif
 	@echo Visualisation and descriptive tables
 	Rscript $<
 
 # Models
-$(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/dredge.tex $(OUTDIR)/models_vars.tex : models.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds plot_func.R tex_func.R
+$(OUTDIR)/modtab.tex $(IMGDIR)/mod_slopes_all.pdf $(OUTDIR)/models_vars.tex : models.R $(DATDIR)/plots.rds $(DATDIR)/div.rds $(DATDIR)/stat_all.rds plot_func.R tex_func.R
 	@echo Models
 	Rscript $<
 
@@ -57,7 +57,8 @@ $(IMGDIR)/mod_slopes.pdf $(IMGDIR)/mod_marg.pdf $(OUTDIR)/dredge.tex $(OUTDIR)/m
 $(OUTDIR)/vars.tex : $(OUTDIR)/prep_vars.tex\
 	$(OUTDIR)/diversity_vars.tex\
 	$(OUTDIR)/models_vars.tex\
-	$(OUTDIR)/stat_vars.tex
+	$(OUTDIR)/stat_vars.tex\
+	$(OUTDIR)/vis_vars.tex
 	@echo Compile LaTeX variables
 	cat $^ > $@
 
@@ -67,22 +68,20 @@ $(IMGDIR)/schematic.pdf : drawio/schematic.drawio
 	./drawio_export.sh $< $@
 
 # Convert time series illustation from .svg to .png
-$(IMGDIR)/ts_illus.png : drawio/ts_illus.svg
-	@echo Compile svg images
-	rsvg-convert -w 2586 -h 1709 $@ $<
+# $(IMGDIR)/ts_illus.png : drawio/ts_illus.svg
+# 	@echo Compile svg images
+# 	rsvg-convert -w 2586 -h 1709 $@ $<
 
 # Compile main tex file and show errors
 $(TEXFILE).pdf : $(TEXFILE).tex\
 	$(OUTDIR)/vars.tex\
 	$(OUTDIR)/clust_summ.tex\
-	$(OUTDIR)/dredge_adj.tex\
-	$(IMGDIR)/schematic_rev_2023-09-01.pdf\
+	$(OUTDIR)/modtab.tex\
+	$(IMGDIR)/schematic.pdf\
 	$(IMGDIR)/site_map.pdf\
 	$(IMGDIR)/box_facet_map_mat.pdf\
 	$(IMGDIR)/ts_illus.png\
-	$(IMGDIR)/mod_slopes.pdf\
-	$(IMGDIR)/mod_marg.pdf\
-	$(IMGDIR)/boxplots.pdf\
+	$(IMGDIR)/mod_slopes_all.pdf\
 	$(IMGDIR)/phen_bivar.pdf
 	@echo Compile manuscript
 	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make -bibtex $<

@@ -18,6 +18,7 @@ library(RcppRoll)
 library(lubridate)
 
 source("./plot_func.R")
+source("./tex_func.R")
 
 # Import data 
 plots <- readRDS("./dat/plots.rds")
@@ -84,7 +85,7 @@ dat$cluster <- factor(dat$cluster,
 # Create facetted boxplot of MAP and MAT
 mat_box <- ggplot(dat, aes(x = cluster, y = mat)) + 
   geom_boxplot(aes(fill = cluster)) + 
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Vegetation type", values = clust_pal) + 
   theme_bw() + 
   theme(
     legend.position = "none",
@@ -93,7 +94,7 @@ mat_box <- ggplot(dat, aes(x = cluster, y = mat)) +
 
 map_box <- ggplot(dat, aes(x = cluster, y = map)) + 
   geom_boxplot(aes(fill = cluster)) + 
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Vegetation type", values = clust_pal) + 
   theme_bw() + 
   theme(
     legend.position = "none",
@@ -135,7 +136,7 @@ clust_summ[c(rbind(seq(2, nrow(clust_summ), 3), seq(3, nrow(clust_summ), 3))),
 clust_summ[c(rbind(seq(1, nrow(clust_summ), 3), seq(3, nrow(clust_summ), 3))), 
   2:3] <- ""
 
-names(clust_summ) <- c("Cluster", "N sites", "Richness", 
+names(clust_summ) <- c("Vegetation type", "N sites", "Richness", 
   "Indicator species", "Indicator value")
 
 # Export indval table
@@ -171,7 +172,7 @@ dat %>%
   geom_density(linewidth = 1.5) + 
   facet_wrap(~variable, scales = "free") + 
   labs(x = "", y = "") +
-  scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  scale_colour_manual(name = "Vegetation type", values = clust_pal) + 
   theme_panel()
 dev.off()
     
@@ -207,8 +208,8 @@ dat$veg_line <- as.character(dat$veg_line)
       stat = "smooth", method = "lm", se = FALSE, linewidth = 1.1) + 
     geom_line(stat = "smooth", method = "lm", se = FALSE, linewidth = 1.1,
       linetype = big_line) + 
-    scale_fill_manual(name = "Cluster", values = clust_pal) + 
-    scale_colour_manual(name = "Cluster", 
+    scale_fill_manual(name = "Vegetation type", values = clust_pal) + 
+    scale_colour_manual(name = "Vegetation type", 
       values = brightness(clust_pal, 0.6)) +
     scale_linetype_discrete(guide = "none") + 
     theme_panel() + 
@@ -231,14 +232,14 @@ zambia <- af[af$sov_a3 == "ZMB",]
 pdf(file = "img/site_loc.pdf", height = 8, width = 10)
 (site_loc <- ggplot() +
   geom_spatraster(data = slen_zambia) + 
-  scale_fill_gradient(name = "Season length\n(days)", 
+  scale_fill_gradient(name = "Season length (d)", 
     low = "#1c1c1c" , high = pal[6], limits = c(100, 330), na.value = NA) + 
   new_scale_fill() +
   geom_sf(data = zambia, colour = "black", fill = NA) +
   geom_sf(data = dat, aes(fill = cluster),
     colour = "black", shape = 24, size = 2) +
   theme_panel() + 
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Vegetation type", values = clust_pal) + 
   labs(x = "", y = "") + 
   ggtitle("Geographic space"))
 dev.off()
@@ -258,11 +259,11 @@ pdf(file = "img/site_clim.pdf", width = 10, height = 8)
   geom_point(data = dat, 
     aes(x = mat, y = map, fill = cluster),
     shape = 24, size = 2) + 
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Vegetation type", values = clust_pal) + 
   stat_ellipse(data = dat,
     aes(x = mat, y = map, colour = cluster), 
     type = "t", level = 0.95, linewidth = 1.2, show.legend = FALSE) + 
-  scale_colour_manual(name = "Cluster", values = clust_pal) + 
+  scale_colour_manual(name = "Vegetation type", values = clust_pal) + 
   theme_panel() + 
   labs(x = expression("MAT" ~ (degree*C)), 
     y = expression("MAP" ~ (mm ~ y^-1))) + 
@@ -332,10 +333,19 @@ stat_all %>%
 lag_table <- table(list(
     "pos green-up" = stat_all$start_lag > 0, 
     "pos senescence lag" = stat_all$end_lag > 0)) 
-lag_table
-nrow(stat_all)
+addmargins(lag_table)
+n_table <- nrow(stat_all)
 
-lag_table / nrow(stat_all) * 100
+lag_table_per <- lag_table / n_table * 100
+
+pos_sen <- round(lag_table[1,2])
+pos_sen_per <- round(lag_table_per[1,2], 1)
+
+pos_gre <- round(lag_table[2,2])
+pos_gre_per <- round(lag_table_per[2,2], 1)
+
+neg_sen <- round(sum(lag_table[,1]))
+neg_sen_per <- round(sum(lag_table_per[,1]), 1)
 
 # Compare methods of estimating start and end of rainy season
 trmm_start_comp <- ggplot(stat_all, aes(x = trmm_start, y = trmm_start10)) + 
@@ -361,3 +371,15 @@ trmm_end_comp <- ggplot(stat_all, aes(x = trmm_end, y = trmm_end95)) +
 pdf(file = "./img/trmm_start_end_comp.pdf", width = 10, height = 5)
 wrap_plots(trmm_start_comp, trmm_end_comp)
 dev.off()
+
+write(
+  c(
+    commandOutput(n_table, "nTable"),
+    commandOutput(pos_sen, "posSen"),
+    commandOutput(pos_sen_per, "posSenPer"),
+    commandOutput(pos_gre, "posGre"),
+    commandOutput(pos_gre_per, "posGrePer"),
+    commandOutput(neg_sen, "negSen"),
+    commandOutput(neg_sen_per, "negSenPer")
+    ),
+  file = "out/vis_vars.tex")

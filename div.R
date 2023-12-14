@@ -202,9 +202,9 @@ pdf(file = "img/ward_sil.pdf", width = 6, height = 4)
 ggplot() + 
   geom_bar(data = sil_best_order, stat = "identity", position = "dodge",
     aes(x = cluster, y = sil_width, fill = as.character(cluster), group = id)) +
-  scale_fill_manual(name = "Cluster", values = clust_pal) + 
+  scale_fill_manual(name = "Vegetation type", values = clust_pal) + 
   theme_bw() + 
-  labs(x = "Cluster", y = "Silhouette width")
+  labs(x = "Vegetation type", y = "Silhouette width")
 dev.off()
 
 # Plot mean silhouette for each number of clusters
@@ -268,11 +268,26 @@ dom_sp %>%
   theme_panel()
 dev.off()
 
-# Find quadratic mean of tree diameter per site
+# Find quadratic mean of tree diameter per site and basal area
 diam_summ <- trees %>%
   group_by(plot_cluster) %>%
-  summarise(diam_quad_mean = sqrt(mean(diam^2, na.rm = TRUE))) %>%
-  dplyr::select(plot_cluster, diam_quad_mean)
+  summarise(
+    diam_quad_mean = sqrt(mean(diam^2, na.rm = TRUE)),
+    ba = sum(pi * (diam/2)^2 / 10000, na.rm = TRUE)) %>% 
+  dplyr::select(plot_cluster, diam_quad_mean, ba)
+
+# Compare basal area and quadratic mean
+qmd_ba_comp <- ggplot(diam_summ, aes(x = diam_quad_mean, y = ba)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", formula = y ~ x, 
+    colour = "red") + 
+  geom_smooth(method = "lm", formula = y ~ I(x^2)) + 
+  theme_bw() + 
+  labs(
+    x = "Quadratic mean diameter (cm)", 
+    y = expression("Basal area"~(m^2)))
+ggsave(qmd_ba_comp, width = 8, height = 5, 
+  file = "./img/qmd_ba_comp.png")
 
 # Add values to data
 plots_div <- plots %>%
