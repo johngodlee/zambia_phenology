@@ -461,8 +461,8 @@ To quantify seasonal patterns of leaf display at each site, we used the MODIS
 MCD12Q2 v6.1 land surface phenology product \citep{MCD12Q2}. MCD12Q2 provides
 annual metrics describing land surface phenology, with a spatial resolution of
 \textasciitilde{}500 m. The phenological metrics in MCD12Q2 are derived from
-the 2-band MODIS EVI time series (1-2 day temporal resolution), with nadir BRDF- (Bidirectional Reflectance
-Distribution Function) adjusted surface reflectance. There are a number of land
+the EVI2 (2-band Enhanced Vegetation Index) time series (1-2 day temporal resolution), with nadir Bidirectional Reflectance
+Distribution Function-adjusted surface reflectance. There are a number of land
 surface phenology products derived from MODIS vegetation indices. MCD12Q2 was
 chosen here as it has been used effectively in other studies in deciduous
 African woodlands to define the growing season \citep{Begue2014, Adole2018b}.
@@ -603,10 +603,9 @@ of detarioid species was a significant predictor of pre-rain green-up
 \begin{figure}[H]
 \centering
 	\includegraphics[width=\textwidth]{mod_slopes_all.pdf}
-	\caption{Standardised fixed effect coefficients (dots) for models of each
-		phenological metric (panels). Estimates are $\pm$95\% confidence interval (whiskers).
-		Slope estimates where the 95\% confidence interval does not overlap zero are considered to be
-		significant effects and are marked by asterisks.}
+	\caption{Standardised fixed effect coefficients (dots) with 95\% confidence
+		intervals (whiskers) for models of each phenological metric (panels). Estimates where the 95\% confidence interval does not overlap zero are
+		considered to be significant and are marked by asterisks.}
 	\label{mod_slopes}
 \end{figure}
 
@@ -665,56 +664,57 @@ metrics, and confirm previous research. Greater rainfall within the rainy
 season led to a longer growing season and greater cumulative EVI, matching our
 expectations that increased water availability allows for greater foliage
 production and builds groundwater reserves allowing for a longer growing season
-\citep{Adole2018a}. Suprsigingly, greater rainfall in the 30 days leading up to the start of
-the growing season was associated with later green-up with respect to the onset
-of the rainy season. We suggest this may be the result of large amounts of
-rainfall kick-starting foliage production in the absence of a pre-rain green-up
-effect in some sites, and may represent cases where grasses drive the start of
-growing season land surface phenology signal. This inability to discriminate
-between the grassy component and the tree canopy component of the phenological
-signal highlights one of the principle drawbacks with space-borne land surface
-phenology to characterise patterns of vegetation leaf display \citep{Archibald2007}. Hotter days were
-associated with shorter periods of senescence and green-up. In the case of
-green-up length, this effect may imply a temperature trigger on leaf display,
-as is seen in temperate woodland ecosystems \citep{Flynn2018}. In the case of
-senescence, hotter days are expected to increase photorespiration and
-ultimately result in a negative leaf carbon balance, triggering leaf loss
-\citep{Warren2011, Marin2019}. This study provides a glimpse into how climate
-change, particularly warming \citep{IPCC} and increased rainfall seasonality
-\citep{Wainwright2021}, could strongly affect leaf phenology in the future in
-southern Africa. Increased temperature and decreased precipitation were both
-strongly associated with decreased growing season length, and weakened the
-pre-rain green-up effect. Future studies could explore
-further how climate extremes affect land surface phenology, ideally in
-combination with measurements of composition and structure, which we expect
-from this study might mediate the effect of climate extremes.
+\citep{Adole2018a}. Surprisingly, greater rainfall in the 30 days leading up to
+the start of the growing season was associated with later green-up with respect
+to the onset of the rainy season. We suggest this may be the result of large
+amounts of rainfall kick-starting foliage production in the absence of a
+pre-rain green-up effect in some sites, and may represent cases where grasses
+drive the start of growing season land surface phenology signal. This inability
+to discriminate between the grassy component and the tree canopy component of
+the phenological signal highlights one of the principle drawbacks with
+space-borne land surface phenology to characterise patterns of vegetation leaf
+display \citep{Archibald2007}. Hotter days were associated with shorter periods
+of senescence and green-up. In the case of green-up length, this effect may
+imply a temperature trigger on leaf display, as is seen in temperate woodland
+ecosystems \citep{Flynn2018}. In the case of senescence, hotter days are
+expected to increase photorespiration and ultimately result in a negative leaf
+carbon balance, triggering leaf loss \citep{Warren2011, Marin2019}. This study
+provides a glimpse into how climate change, particularly warming \citep{IPCC}
+and increased rainfall seasonality \citep{Wainwright2021}, could strongly
+affect leaf phenology in the future in southern Africa. Increased temperature
+and decreased precipitation were both strongly associated with decreased
+growing season length, and weakened the pre-rain green-up effect. Future
+studies could explore further how climate extremes affect land surface
+phenology, ideally in combination with measurements of composition and
+structure, which we expect from this study might mediate the effect of climate
+extremes.
 
-The lag between the end of the growing season and the end of the rainy season
-was negatively influenced by mean stem diameter, though our model had low
-explanatory power. \citet{Cho2017} similarly found that tree cover, measured by
-MODIS Leaf Area Index (LAI) data, had a significant negative effect on
-senescence rates in tropical dry woodlands in South Africa. In
-savanna-woodlands, where grasses and trees co-exist, while the onset of the
-growing season is often determined by tree photosynthetic activity
-\citep{Ryan2017, Archibald2007, Chidumayo2001}, the end of the growing season
-is often dominated by the foliage display of the understorey grass layer
-\citep{Cho2017, Guan2014}. Grass activity is more reactive to short-term
-changes in soil moisture than tree activity, and may oscillate within the
-senescence period \citep{Archibald2007}. This may explain the lack of a strong
-growing season precipitation or tree diversity signal for senescence lag and
-length of the senescence period in our models.
+The end of the growing season came later with respect to the end of the rainy season in plots with larger mean stem diameter, though our model had low
+explanatory power. \citet{Cho2017} found that tree cover, measured by MODIS
+Leaf Area Index (LAI) data, had a significant positive effect on end of growing
+season date in tropical dry woodlands in South Africa. Similarly,
+\citet{Guan2014} found at continental scale across Africa that the end of the
+growing season came later with respect to the end of the rainy season in areas
+where tree cover was higher. Both these previous studies posit that the
+observed effect of tree cover on end of growing season date might indicate the
+presence of larger trees capable of accessing deeper groundwater reserves or
+holding stem-water reserves after the rainy season ends and surface soil
+moisture is depleted. Our study lends further support for this suggestion
+by directly testing the effect of tree size, rather than tree cover. 
 
-Our best models predicting the length of the senescence period did not explain
-much of the variance in these phenological metrics. Short term oscillations in
-soil moisture driven by localised rainfall events, and the condition of ground
-cover vegetation may be responsible for driving the length of the senescence
-period, hence the wide variability of this phenological metric and the poor fit
-of our statistical models. Most of the variance explained by our models of
-senescence length and senescence lag came from the random effect of site,
-implying some unmeasured inter-site variation. Perhaps the the particular
-combination of species and the synchrony of their phenological strategy might
-be the determining factor for this phenological metric, though more work must
-be done to explore this further.
+Our best models predicting the length of the senescence period and the end of
+growing season lag did not explain much of the variance in these phenological
+metrics. Short term oscillations in soil moisture driven by localised rainfall
+events, and the condition of ground cover vegetation may be responsible for
+driving the length of the senescence period, hence the wide variability of this
+phenological metric and the poor fit of our statistical models. Most of the
+variance explained by our models of senescence period length and senescence lag
+came from the random effect of site, implying some unmeasured inter-site
+variation. Grass productivity is more reactive to short-term changes in soil
+moisture than tree activity, and may oscillate within the senescence period
+\citep{Archibald2007}. This may explain the lack of a strong growing season
+precipitation or tree diversity signal for senescence lag and length of the
+senescence period in our models.
 
 Other studies, both globally and within southern African woodlands, have
 largely ignored patterns of senescence, instead focussing on patterns of
