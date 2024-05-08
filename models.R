@@ -35,6 +35,31 @@ dat <- plots %>%
   inner_join(., div, by = "plot_cluster") %>% 
   inner_join(., stat_all, by = "plot_cluster") 
 
+summary(dat[,names(resp_lookup)])
+
+hists <- dat %>% 
+  dplyr::select(
+    EVI_Area,
+    season_length, 
+    start_lag,
+    end_lag,
+    green_rate,
+    senes_rate) %>% 
+  st_drop_geometry() %>% 
+  pivot_longer(everything()) %>% 
+  mutate(
+    resp_pretty = factor(name,
+      levels = names(resp_plot_axes[c(1,3,5,2,4,6)]),
+      labels = resp_plot_axes[c(1,3,5,2,4,6)])) %>% 
+  ggplot(., aes(x = value)) + 
+  geom_histogram(colour = "black", aes(fill = resp_pretty)) + 
+  facet_wrap(~resp_pretty, scales = "free") + 
+  theme_bw() + 
+  theme(legend.position = "none") + 
+  labs(y = "N plots", x = NULL)
+ggsave(hists, width = 12, height = 5, filename = "./img/hists.png")
+
+
 greenLagMean <- paste0(round(mean(dat$start_lag, na.rm = TRUE), 0), "$\\pm$", 
   round(sd(dat$start_lag, na.rm = TRUE), 1))
 
@@ -60,6 +85,14 @@ pos_gre_all <- dat %>%
   group_by(plot_cluster) %>% 
   summarise(start_lag = mean(start_lag, na.rm = TRUE)) %>% 
   filter(start_lag > 0) %>% 
+  pull(plot_cluster) %>% unique() %>% length()
+
+pos_sen_all <- dat %>% 
+  group_by(plot_cluster) %>% 
+  summarise(end_lag = mean(end_lag, na.rm = TRUE)) %>% 
+  pull(end_lag) %>% 
+  summary()
+  filter(end_lag > 0) %>% 
   pull(plot_cluster) %>% unique() %>% length()
 
 # Boxplots of phenological metrics per cluster
