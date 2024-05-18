@@ -144,7 +144,7 @@ clust_summ_xtable <- xtable(clust_summ,
   label = "clust_summ",
   align = rep("c", 6),
   display = rep("s", 6),
-  caption = "Dufr\\^{e}ne-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm, based on basal area weighted species abundances \\citep{Dufrene1997}. The three species per cluster with the highest indicator values are shown alongside the median and interquartile range of site species richness and the number of sites within each cluster.")
+  caption = "Dufr\\^{e}ne-Legendre indicator species analysis for the vegetation type clusters identified by the PAM algorithm, based on basal area weighted species abundances \\citep{Dufrene1997}. The three species per cluster with the highest indicator values are shown alongside the median (interquartile range) of site species richness and the number of sites within each cluster.")
 
 fileConn <- file("out/clust_summ.tex")
 writeLines(print(clust_summ_xtable, include.rownames = FALSE,
@@ -265,8 +265,8 @@ pdf(file = "img/site_clim.pdf", width = 10, height = 8)
     type = "t", level = 0.95, linewidth = 1.2, show.legend = FALSE) + 
   scale_colour_manual(name = "Vegetation type", values = clust_pal) + 
   theme_panel() + 
-  labs(x = expression("MAT" ~ (degree*C)), 
-    y = expression("MAP" ~ (mm ~ y^-1))) + 
+  labs(x = expression("Mean Annual Temperature" ~ (degree*C)), 
+    y = expression("Mean Annual Precipitation" ~ (mm ~ y^-1))) + 
   ggtitle("Climate space"))
 dev.off()
 
