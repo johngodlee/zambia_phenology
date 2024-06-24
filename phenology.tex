@@ -139,18 +139,19 @@ The authors declare no conflict of interest.
 
 \section*{Author contribution statement}
 
-JLG conceived the study, conducted the analysis, and wrote the first draft of
-the manuscript. AS coordinated field data collection in Zambia. All authors
+John L. Godlee conceived the study, conducted the analysis, and wrote the first draft of
+the manuscript. Abel Siampale coordinated field data collection in Zambia. All authors
 contributed to manuscript revisions. 
 
 \section*{Data accessibility statement}
 
 Field data used in this study are from the Zambian Integrated Land Use
-Assessment (ILUA-II). Data were cleaned and archived by the SEOSAW project (The
-Socio-Ecological Observatory for Studying African Woodlands). An anonymised
-version of the field data are available at the following DOI:
-\url{https://doi.org/10.7488/ds/7735} \citep{Godlee2024}. Code developed for data analysis can be
-found here: \url{https://github.com/johngodlee/zambia_phenology}.
+Assessment Phase II (ILUA II). Data were cleaned and archived by the SEOSAW
+project (The Socio-Ecological Observatory for Studying African Woodlands). An
+anonymised version of the field data are available at the following DOI:
+\url{https://doi.org/10.7488/ds/7735} \citep{Godlee2024}. Code developed for
+data analysis can be found at the following DOI: 
+\url{} \citep{Godlee2024a}.
 
 \newpage{}
 \linenumbers
@@ -303,20 +304,22 @@ experience earlier pre-rain green-up.
 \subsection{Plot data}
 
 We used data on tree species diversity and composition from 619 sites surveyed
-as part of the Zambian Integrated Land Use Assessment Phase II (ILUA-II),
-conducted in 2014 \citep{Mukosha2009, Pelletier2018}. Each site consisted of
-four 50$\times$20 m (0.1 ha) plots positioned in a 500$\times$500 m square
-around a central point (\autoref{schematic}), resulting in a total plot area
-per site of \num{4000} m\textsuperscript{2}. The original assessment contained
-993 sites, which was filtered in order to define study bounds and to ensure
-data quality. Only sites with $\geq$50 stems ha\textsuperscript{-1} $\geq$10 cm
-DBH (Diameter at Breast Height) were included in the analysis, to ensure all
-sites represented woodlands with a relatively continuous canopy rather than
-open `grassy savanna', which is considered a separate biome with different
-species composition and ecosystem processes governing phenology
-\citep{Morellato2013, Keith2020}. 
+as part of the Zambian Integrated Land Use Assessment Phase II (ILUA II),
+conducted in 2014 \citep{ILUA2016, Pelletier2018}. Field data collection was
+sanctioned by the Zambian Forestry Department in the Ministry of Lands and
+Natural Resources \citep{ILUA2016}. Each site consisted of four 50$\times$20 m
+(0.1 ha) plots positioned in a 500$\times$500 m square around a central point
+(\autoref{schematic}), resulting in a total plot area per site of \num{4000}
+m\textsuperscript{2}. The original assessment contained 993 sites, which was
+filtered in order to define study bounds and to ensure data quality. Only sites
+with $\geq$50 stems ha\textsuperscript{-1} $\geq$10 cm DBH (Diameter at Breast
+Height) were included in the analysis, to ensure all sites represented
+woodlands with a relatively continuous canopy rather than open `grassy
+savanna', which is considered a separate biome with different species
+composition and ecosystem processes governing phenology \citep{Morellato2013,
+Keith2020}. 
 
-Plots in the ILUA-II dataset sampled stems $\geq$10 cm DBH across the area of
+Plots in the ILUA II dataset sampled stems $\geq$10 cm DBH across the area of
 the whole plot, while stems <10 cm DBH were only measured within a 20$\times$10
 m (0.02 ha) nested subplot. We chose to use only stem measurements $\geq$10 cm
 DBH in this study, discarding measurements from the nested subplots. In
@@ -527,15 +530,17 @@ To quantify seasonal patterns of leaf display at each site, we used the MODIS
 MCD12Q2 v6.1 land surface phenology product \citep{MCD12Q2}. MCD12Q2 provides
 annual metrics describing land surface phenology, with a spatial resolution of
 \textasciitilde{}500 m. The phenological metrics in MCD12Q2 are derived from
-the 2-band Enhanced Vegetation Index time series (1-2 day temporal resolution),
-with nadir Bidirectional Reflectance Distribution Function-adjusted surface
-reflectance (NBAR-EVI2). There are a number of land surface phenology products
-derived from MODIS vegetation indices. MCD12Q2 was chosen here as it has been
-used effectively in other studies in deciduous African woodlands to define the
-growing season \citep{Begue2014, Adole2018a}. Additionally, a previous
-comparison of MODIS-derived land surface phenology products showed that MCD12Q2
-out-performed other products in predicting the start of the growing season in
-relation to ground observations \citep{Peng2017}. 
+the 2-band Enhanced Vegetation Index (EVI2) time series (1-2 day
+temporal resolution). The MCD12Q2 EVI2 time series is calculated from MODIS
+Nadir Bidirectional Reflectance Distribution Function (BRDF)-Adjusted
+Reflectance (NBAR), which removes view angle effects. There are a number of
+land surface phenology products derived from MODIS vegetation indices. MCD12Q2
+was chosen here as it has been used effectively in other studies in deciduous
+African woodlands to define the growing season \citep{Begue2014, Adole2018a}.
+Additionally, a previous comparison of MODIS-derived land surface phenology
+products showed that MCD12Q2 out-performed other products in predicting the
+start of the growing season in relation to ground observations
+\citep{Peng2017}. 
 
 All sites were determined to have a single annual growing season according to
 the MCD12Q2 ``NumCycles'' metric. We used all years of data from 2001 to 2021.
@@ -586,23 +591,25 @@ to be less than that among sites.
 \begin{figure}[H]
 \centering
 	\includegraphics[width=0.8\textwidth]{ts_illus}
-	\caption{Schematic diagram of hypothetical splined NBAR-EVI2 time series
-		(black curve), from which metrics provided by the MCD12Q2 product are
-		derived (black circles), Adapted from \citet{Gray2022}. Cumulative EVI
-		is denoted by the shaded area under the EVI curve for a given growing
-		season, bounded by the ``Greenup'' and ``Dormancy'' dates. The blue
-		curve shows a hypothetical splined 10 day rolling total rainfall time
-		series, derived from the GPM IMERG product. Blue circles indicate the
-		start and end of the rainy season as defined by our algorithm. Dashed
-		black lines indicate the derived phenological metrics used in this
-		study. In this hypothetical example, ``Greenup'' occurs in advance of
-		the start of the rainy season, and ``Dormancy'' occurs after the end of
-		the rainy season, reflecting the condition of 72.7\%
-		(\num{8451}/\num{11625}) of the yearly data in our dataset. In 26.7\%
-		(\num{3106}/\num{11625}) of cases, dormancy occurred after the end of
-		the rainy season and green-up occurred after the start of the rainy
-		season. In 0.6\% (\num{68}/\num{11625}) of cases, dormancy occurred before 
-		the end of the rainy season.}
+	\caption{Schematic diagram of hypothetical 2-band Enhanced Vegetation Index
+		(EVI2) time series (black curve), derived from MODIS Nadir Bidirectional
+		Reflectance Distribution Function (BRDF)-Adjusted Reflectance (NBAR),
+		from which metrics provided by the MCD12Q2 product are derived (black
+		circles), Adapted from \citet{Gray2022}. Cumulative EVI is denoted by
+		the shaded area under the EVI curve for a given growing season, bounded
+		by the ``Greenup'' and ``Dormancy'' dates. The blue curve shows a
+		hypothetical splined 10 day rolling total rainfall time series, derived
+		from the GPM IMERG product. Blue circles indicate the start and end of
+		the rainy season as defined by our algorithm. Dashed black lines
+		indicate the derived phenological metrics used in this study. In this
+		hypothetical example, ``Greenup'' occurs in advance of the start of the
+		rainy season, and ``Dormancy'' occurs after the end of the rainy
+		season, reflecting the condition of 72.7\% (\num{8451}/\num{11625}) of
+		the yearly data in our dataset. In 26.7\% (\num{3106}/\num{11625}) of
+		cases, dormancy occurred after the end of the rainy season and green-up
+	occurred after the start of the rainy season. In 0.6\%
+(\num{68}/\num{11625}) of cases, dormancy occurred before the end of the rainy
+season.}
 	\label{ts_illus}
 \end{figure}
 
@@ -668,7 +675,7 @@ diameter per site, was a significant predictor of pre-rain green-up
 ($\beta$=2.0$\pm$0.38) and green-up length ($\beta$=1.0$\pm$0.33), associated
 with early pre-rain green-up and a longer green-up period (H\textsubscript{3}).
 Sites with larger trees also experienced later senescence
-($\beta$=0.8$\pm$0.67). The proportional basal area of detarioid species was a
+($\beta$=-2.4$\pm$0.40). The proportional basal area of detarioid species was a
 significant predictor of pre-rain green-up ($\beta$=1.0$\pm$0.40), and season
 length ($\beta$=1.7$\pm$0.71) (H\textsubscript{4}). 
 
@@ -678,11 +685,13 @@ length ($\beta$=1.7$\pm$0.71) (H\textsubscript{4}).
 	\caption{Standardised fixed effect coefficients (dots) with 95\% confidence
 		intervals (whiskers) for models of each phenological metric (panels).
 		Estimates where the 95\% confidence interval does not overlap zero are
-		considered to be significant and are marked by asterisks. Temperature (degree
-		days) and precipitation data were summed over different periods most relevant
-		to each phenological metric. Green-up length and pre-rain green-up used data
-		from the 30 day pre-green-up period, senescence length and senescence lag used
-		data from the 30 day pre-senescence period, cumulative EVI and season length
+		considered to be significant and are marked by asterisks. Temperature
+		(degree days) and precipitation data were summed over different periods
+		most relevant to each phenological metric. Only one of these
+		temperature and precipitation variables was used in each model.
+		Green-up length and pre-rain green-up used data from the 30 day
+		pre-green-up period, senescence length and senescence lag used data
+		from the 30 day pre-senescence period, cumulative EVI and season length
 		used data from the growing season period.}
 	\label{mod_slopes}
 \end{figure}
@@ -704,7 +713,7 @@ ecosystem function in southern African seasonally dry tropical woodlands,
 measured through leaf display \citep{Richardson2009}, which aligns with other
 recent studies in the region \citep{Godlee2021, McNicol2018, Shirima2015}. Our
 results highlight the important role of detarioid species in southern African
-woodland productivity: we show that increasing abundance of these species
+woodland function we show that increasing abundance of these species
 increases both early season productivity and overall growing season length.
 
 The basal area of detarioid species had a positive effect on pre-rain green-up.
@@ -765,10 +774,10 @@ Africa. Future temperature increases in miombo woodlands, particularly high
 temperatures at the start and end of the rainy season, could accelerate
 green-up and senescence processes. Similarly, a reduction in precipitation
 during the growing season could reduce growing season length and overall
-productivity. Future studies could explore further how climate extremes affect
-land surface phenology, ideally in combination with measurements of species
-composition and ecosystem structure, which this study has shown are also
-important drivers of ecosystem function.
+productivity. Future studies could explore further how extreme climate events, rather than long-term climate averages as studied here, affect land surface
+phenology, ideally in combination with measurements of species composition and
+ecosystem structure, which this study has shown are important determinants of
+ecosystem function. 
 
 The end of the growing season came later with respect to the end of the rainy
 season in plots with larger mean stem diameter, though our model had low

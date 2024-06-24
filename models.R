@@ -90,9 +90,6 @@ pos_gre_all <- dat %>%
 pos_sen_all <- dat %>% 
   group_by(plot_cluster) %>% 
   summarise(end_lag = mean(end_lag, na.rm = TRUE)) %>% 
-  pull(end_lag) %>% 
-  summary()
-  filter(end_lag > 0) %>% 
   pull(plot_cluster) %>% unique() %>% length()
 
 # Boxplots of phenological metrics per cluster
@@ -373,6 +370,13 @@ sl_size_se <- unsc_param[unsc_param$resp == "season_length" &
   unsc_param$name == "diam_quad_mean", "std.error"]
 sl_size <- paste0("$\\beta$=", numFormat(sl_size_mean, 1), "$\\pm$", numFormat(sl_size_se, 2))
 
+el_size_mean <- unsc_param[unsc_param$resp == "end_lag" & 
+  unsc_param$name == "diam_quad_mean", "estimate"]
+el_size_se <- unsc_param[unsc_param$resp == "end_lag" & 
+  unsc_param$name == "diam_quad_mean", "std.error"]
+el_size <- paste0("$\\beta$=", numFormat(el_size_mean, 1), "$\\pm$", numFormat(el_size_se, 2))
+
+
 gl_size_mean <- unsc_param[unsc_param$resp == "green_rate" & 
   unsc_param$name == "diam_quad_mean", "estimate"]
 gl_size_se <- unsc_param[unsc_param$resp == "green_rate" & 
@@ -447,6 +451,7 @@ write(
     commandOutput(pr_rich, "prRich"),
     commandOutput(pr_size, "prSize"),
     commandOutput(gl_size, "glSize"),
+    commandOutput(sl_size, "slSize"),
     commandOutput(sl_size, "slSize"),
     commandOutput(pr_det, "prDet"),
     commandOutput(sl_det, "slDet"),
