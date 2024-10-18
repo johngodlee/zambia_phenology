@@ -1,6 +1,6 @@
 Code for "[Tree species diversity drives the land surface phenology of seasonally dry tropical woodlands]()"
 
-Godlee, J. L.; Ryan, C. M.; Siampale, A.; Dexter K. G. 2024. Tree species diversity drives the land surface phenology of seasonally dry tropical woodlands. _Journal of Ecology_. VOL(ISSUE), PAGES.
+Godlee, J. L.; Ryan, C. M.; Siampale, A.; Dexter K. G. 2024. Tree species diversity drives the land surface phenology of seasonally dry tropical woodlands. _Journal of Ecology_. 112, 1978-1991.
 
 > Seasonal foliage display (leaf phenology) is a key determinant of ecosystem function. Variation in land surface phenology, observed via space-borne remote sensing, can be explained at broad spatial scales by climate, but we lack understanding of how vegetation structure and floristic diversity mediates these relationships. This lack of understanding hampers our ability to predict changes in phenology and therefore ecosystem function, in light of rapid ongoing shifts in biodiversity and ecosystem structure due to land use and climate change.
 > We combined a network of 619 vegetation monitoring sites across seasonally dry tropical deciduous woodlands in Zambia with land surface phenology metrics to investigate the role of tree species diversity, composition and vegetation structure on patterns of land surface phenology, including the phenomenon of pre-rain green-up.
@@ -14,10 +14,9 @@ Godlee, J. L.; Ryan, C. M.; Siampale, A.; Dexter K. G. 2024. Tree species divers
   author = {Godlee, J. L. and Ryan, C. M. and Siampale, A. and Dexter K. G. },
   journal = {Journal of Ecology},
   year = 2024,
-  volume = {},
-  issue = {},
-  pages = {}
-  DOI = {}
+  volume = {112},
+  pages = {1978-1991}
+  DOI = {https://doi.org/10.1111/1365-2745.14366}
 }
 ```
 
